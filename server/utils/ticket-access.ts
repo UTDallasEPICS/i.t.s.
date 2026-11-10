@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { createError, type H3Event } from 'h3'
 import { project, tickets, user } from '../db/schema'
+import { isAdmin } from './authorization'
 import { db } from './db'
 import { requireUser } from './session'
 
@@ -19,8 +20,12 @@ export function requireTicketUser(event: H3Event, reader: Reader = db) {
   return currentUser
 }
 
+// Uses the identity workstream's definition of NPTS (docs/authorization.md). Its
+// requireProjectAccess() guard is not called here because these routes answer 404
+// for another organization's project (ADR 002) and re-check inside write transactions.
 export function projectAccessScope(currentUser: { orgId: string | null }) {
-  return currentUser.orgId === null ? undefined : eq(project.projectPartnerId, currentUser.orgId)
+  const { orgId } = currentUser
+  return isAdmin(orgId) ? undefined : eq(project.projectPartnerId, orgId)
 }
 
 export function requireAccessibleProject(

@@ -3,10 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
-import { USelect } from '#components'
 import NewTicketPage from '../../app/pages/tickets/new.vue'
 import Dashboard from '../../app/pages/index.vue'
-import TicketForm from '../../app/components/TicketForm.vue'
+import TicketForm from '../../app/components/shared/TicketForm.vue'
 
 const { useFetchMock, submitMock } = vi.hoisted(() => ({
   useFetchMock: vi.fn(),
@@ -59,7 +58,7 @@ describe('new ticket page', () => {
   })
 
   async function fillForm() {
-    await wrapper.getComponent(USelect).setValue(7)
+    await wrapper.get('select').setValue('7')
     await wrapper.get('input').setValue('  Contact form is broken  ')
     await wrapper.get('textarea').setValue('  Clicking Send does nothing.  ')
   }
