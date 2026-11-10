@@ -83,7 +83,7 @@ may change the ticket, and whether closed tickets remain editable.
 | `/tickets` | Shared list; server-scoped data, status, loading/error/empty states, and agreed project/status filters | Aryan |
 | `/tickets/:id` | Shared detail; status display, partner editing, and an integration point for Seth's NPTS status control | Aryan |
 | `/tickets/new` | Existing shared creation page | Aryan |
-| `app/components/TicketForm.vue` | Existing creation form, reusable by widget; edit/fixed-project support to agree | Aryan |
+| `app/components/shared/TicketForm.vue` | Creation form shared with the widget (plain Vue, ADR 004); selectable, fixed or parent-resolved project | Aryan |
 | `app/components/TicketList.vue` | Shared ticket rows with links to details | Aryan |
 | `app/components/TicketStatusBadge.vue` | Shared display of saved status | Aryan |
 | `app/components/TicketStatusControl.vue` | NPTS status change control; endpoint independently enforces access | Seth |

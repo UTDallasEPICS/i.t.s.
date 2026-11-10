@@ -2,8 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import { flushPromises } from '@vue/test-utils'
-import { USelect } from '#components'
-import TicketForm from '../../app/components/TicketForm.vue'
+import TicketForm from '../../app/components/shared/TicketForm.vue'
 
 const projects = [
   { id: 7, name: 'Community Website' },
@@ -15,11 +14,7 @@ describe('TicketForm', () => {
 
   beforeEach(async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network request'))
-    wrapper = await mountSuspended(TicketForm, {
-      props: { projects },
-      // Icons are decorative; keep their runtime loading out of these form tests.
-      global: { stubs: { UIcon: true } },
-    })
+    wrapper = await mountSuspended(TicketForm, { props: { projects } })
   })
 
   afterEach(() => {
@@ -29,7 +24,7 @@ describe('TicketForm', () => {
   })
 
   async function fillForm() {
-    await wrapper.getComponent(USelect).setValue(7)
+    await wrapper.get('select').setValue('7')
     await wrapper.get('input').setValue('  Contact form is broken  ')
     await wrapper.get('textarea').setValue('  Clicking Send does nothing.  ')
   }
@@ -120,13 +115,50 @@ describe('TicketForm', () => {
   })
   it('supports a fixed widget project without a selector or project list', async () => {
     await wrapper.setProps({ projects: [], projectId: 12 })
-    expect(wrapper.findComponent(USelect).exists()).toBe(false)
+    expect(wrapper.find('select').exists()).toBe(false)
     await wrapper.get('input').setValue('Widget issue')
     await wrapper.get('textarea').setValue('Submitted from a project site.')
     await submit()
     expect(wrapper.emitted('submit')).toEqual([
       [{ projectId: 12, title: 'Widget issue', description: 'Submitted from a project site.' }],
     ])
+  })
+
+  it('emits only the ticket text when the parent resolves the project (widget site tag)', async () => {
+    await wrapper.setProps({ projects: [], omitProject: true })
+    expect(wrapper.find('select').exists()).toBe(false)
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    await wrapper.get('input').setValue('  Widget issue  ')
+    await wrapper.get('textarea').setValue('Submitted from a project site.')
+    await submit()
+    expect(wrapper.emitted('submit')).toEqual([
+      [{ title: 'Widget issue', description: 'Submitted from a project site.' }],
+    ])
+  })
+
+  it('applies the shared length limits', async () => {
+    await fillForm()
+    await wrapper.get('input').setValue('a'.repeat(201))
+    await wrapper.get('textarea').setValue('b'.repeat(5001))
+    await submit()
+
+    expect(wrapper.text()).toContain('Keep the title to 200 characters or fewer.')
+    expect(wrapper.text()).toContain('Keep the description to 5000 characters or fewer.')
+    expect(wrapper.emitted('submit')).toBeUndefined()
+  })
+
+  it('marks invalid fields and clears each message once the field is fixed', async () => {
+    await submit()
+    const title = wrapper.get('input')
+    expect(title.attributes('aria-invalid')).toBe('true')
+    expect(wrapper.get(`#${title.attributes('aria-describedby')}`).text()).toBe(
+      'Enter a ticket title.'
+    )
+
+    await title.setValue('Broken link')
+    expect(title.attributes('aria-invalid')).toBeUndefined()
+    expect(wrapper.text()).not.toContain('Enter a ticket title.')
+    expect(wrapper.text()).toContain('Describe the issue.')
   })
 
   it('shows a parent error and preserves the draft when disabled', async () => {

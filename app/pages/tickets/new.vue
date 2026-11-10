@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import type { TicketFormValues, TicketProjectOption } from '../../types/ticket'
+  import type { TicketProjectOption, TicketSubmission } from '../../types/ticket'
 
   const {
     data: projects,
@@ -22,7 +22,7 @@
     return 'We could not load your projects. Please try again.'
   })
 
-  async function submitTicket(values: TicketFormValues) {
+  async function submitTicket(values: TicketSubmission) {
     if (submitting.value || createdTicket.value) return
 
     submitting.value = true
@@ -83,7 +83,11 @@
         :description="submitError"
       />
       <UCard>
-        <TicketForm :projects="projects ?? []" :submitting="submitting" @submit="submitTicket" />
+        <SharedTicketForm
+          :projects="projects ?? []"
+          :submitting="submitting"
+          @submit="submitTicket"
+        />
       </UCard>
     </div>
   </UContainer>

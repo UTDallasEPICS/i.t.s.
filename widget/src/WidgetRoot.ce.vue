@@ -1,9 +1,10 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  // Shared component that lives in the main ITS app (app/components/shared).
-  // Importing it here proves UI code can be reused in the widget.
+  // Shared components that live in the main ITS app (app/components/shared).
+  // The ticket form is the same one the partner "New ticket" screen renders.
   import StatusPill from '../../app/components/shared/StatusPill.vue'
-  import WidgetTicketForm from './WidgetTicketForm.vue'
+  import TicketForm from '../../app/components/shared/TicketForm.vue'
+  import type { TicketSubmission } from '#shared/tickets'
 
   // Values passed in from main.ts (site-tag="..." becomes siteTag)
   const props = defineProps<{ siteTag: string; apiBase: string }>()
@@ -37,7 +38,8 @@
   }
 
   // The form only reports what the user typed; the widget sends it to ITS.
-  async function submitTicket(ticket: { title: string; description: string }) {
+  // With omit-project the payload is { title, description }: the site tag picks the project.
+  async function submitTicket(ticket: TicketSubmission) {
     submitting.value = true
     message.value = ''
     try {
@@ -92,8 +94,12 @@
       </div>
 
       <template v-else>
-        <WidgetTicketForm :submitting="submitting" @submit="submitTicket" />
-        <p v-if="message" class="message error">{{ message }}</p>
+        <TicketForm
+          omit-project
+          :submitting="submitting"
+          :error="result === 'error' ? message : null"
+          @submit="submitTicket"
+        />
       </template>
     </div>
     <button class="launcher" @click="toggle">?</button>
