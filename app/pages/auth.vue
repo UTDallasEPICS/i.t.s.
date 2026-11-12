@@ -45,7 +45,7 @@
       if (error) {
         toast.add({ title: 'Error', description: error.message, color: 'error' })
       } else {
-        await navigateTo('/', { external: true })
+        await navigateTo('/tickets', { external: true })
       }
     }
   }

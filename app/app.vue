@@ -1,4 +1,9 @@
 <script setup lang="ts">
+  import type { DropdownMenuItem } from '@nuxt/ui/runtime/components/DropdownMenu.vue'
+  import { authClient } from './utils/auth-client'
+  import { clearChatDrafts } from './utils/chat-drafts'
+  import { useCurrentUser } from './composables/useCurrentUser'
+
   const colorMode = useColorMode()
 
   const isDark = computed({
@@ -9,6 +14,109 @@
       colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
     },
   })
+
+  const { user, isAdmin, pending } = await useCurrentUser()
+
+  const selectedFile = ref<File | null>(null)
+  const imagePreview = ref<string>('')
+  const isUploading = ref(false)
+  const isModalOpen = ref(false)
+
+  async function logout() {
+    const result = await authClient.signOut()
+    if (result.error) return
+    clearChatDrafts()
+    await navigateTo('/auth', { external: true })
+  }
+
+  function profileImageUrl() {
+    return user.value?.image ? `/api/users/${user.value.id}/profile` : undefined
+  }
+
+  // Fall back to the user's initials when no profile picture is set.
+  const userInitials = computed(() => {
+    const name = user.value?.name ?? ''
+    return name
+      .split(' ')
+      .map((word) => word.charAt(0))
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || '?'
+  })
+
+  function handleImageUpload(event: Event) {
+    const target = event.target as HTMLInputElement
+    const files = target.files as FileList
+
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+
+    if (!file?.type.startsWith('image/')) {
+      return
+    }
+
+    selectedFile.value = file
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      imagePreview.value = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const openModal = () => {
+    isModalOpen.value = true
+  }
+
+  const closeModal = () => {
+    isModalOpen.value = false
+  }
+
+  async function updatePfp() {
+    if (!selectedFile.value) return
+
+    isUploading.value = true
+
+    try {
+      const formData = new FormData()
+      formData.append('file', selectedFile.value)
+
+      await $fetch('/api/users/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      // Refresh current user data to show the updated profile picture
+      await refreshNuxtData()
+
+      // Reset state
+      selectedFile.value = null
+      imagePreview.value = ''
+      isModalOpen.value = false
+    } catch (error) {
+      console.error('Upload failed:', error)
+    } finally {
+      isUploading.value = false
+    }
+  }
+
+  const accountMenuItems = computed<DropdownMenuItem[]>(() => [
+    {
+      label: 'Update Profile Picture',
+      icon: 'i-heroicons-arrow-up-on-square-20-solid',
+      onSelect: openModal,
+    },
+    {
+      type: 'separator' as const,
+    },
+    {
+      label: 'Logout',
+      color: 'error',
+      icon: 'i-heroicons-arrow-right-on-rectangle-20-solid',
+      onSelect: logout,
+    },
+  ])
 </script>
 
 <template>
@@ -26,11 +134,14 @@
           </NuxtLink>
 
           <div class="flex items-center gap-2">
-            <!--
-              Both icons stay mounted. During SSR a system preference is the
-              string "system", so a single icon chosen from colorMode.value is
-              the sun and never updates after the client resolves that to dark.
-            -->
+            <!-- Ticket navigation only appears once the user is authenticated. Neutral buttons (no color). -->
+            <UButton v-if="user" to="/tickets" variant="ghost">View tickets</UButton>
+            <UButton v-if="user" to="/tickets/new" variant="ghost">New ticket</UButton>
+            <UButton v-if="isAdmin" to="/admin" variant="ghost">Manage users</UButton>
+
+            <!-- Theme toggle sits to the left of the profile/account button. Both icons stay mounted so
+                 the icon reflects the resolved theme (including a "system" preference) instead of being
+                 fixed to the sun. -->
             <UButton
               color="neutral"
               variant="ghost"
@@ -48,6 +159,38 @@
                 />
               </template>
             </UButton>
+
+            <UDropdownMenu
+              v-if="user && !pending"
+              :items="accountMenuItems"
+            >
+              <template #default="{ open }">
+                <UButton
+                  variant="ghost"
+                  class="p-0 rounded-full"
+                  :aria-expanded="open"
+                  aria-label="Account"
+                >
+                  <UAvatar
+                    v-if="user?.image"
+                    :src="profileImageUrl()"
+                    :alt="user.name"
+                    class="h-8 w-8 rounded-full"
+                  />
+                  <div
+                    v-else
+                    class="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200"
+                  >
+                    {{ userInitials }}
+                  </div>
+                  <UIcon
+                    name="i-heroicons-chevron-down-20-solid"
+                    class="ml-1 h-4 w-4"
+                    aria-hidden="true"
+                  />
+                </UButton>
+              </template>
+            </UDropdownMenu>
           </div>
         </UContainer>
       </header>
@@ -55,6 +198,41 @@
       <main class="flex-1">
         <NuxtPage />
       </main>
+
+      <UModal :open="isModalOpen">
+        <template #content>
+          <div class="m-12 space-y-4">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+              Update Profile Picture
+            </h3>
+
+            <div v-if="imagePreview" class="flex justify-center">
+              <UAvatar :src="imagePreview" size="3xl" />
+            </div>
+
+            <div>
+              <input
+                type="file"
+                accept="image/*"
+                class="file:bg-primary-50 file:text-brand4 hover:file:bg-primary-100 block w-full cursor-pointer text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:px-4 file:py-2 file:text-sm file:font-semibold"
+                @change="handleImageUpload"
+              />
+            </div>
+
+            <div class="flex justify-end gap-2">
+              <UButton variant="soft" @click="closeModal"> Cancel </UButton>
+              <UButton
+                color="success"
+                :loading="isUploading"
+                :disabled="!selectedFile"
+                @click="updatePfp"
+              >
+                Upload
+              </UButton>
+            </div>
+          </div>
+        </template>
+      </UModal>
     </div>
   </UApp>
 </template>

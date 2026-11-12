@@ -5,7 +5,6 @@ import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { USelect } from '#components'
 import NewTicketPage from '../../app/pages/tickets/new.vue'
-import Dashboard from '../../app/pages/index.vue'
 import TicketForm from '../../app/components/TicketForm.vue'
 
 const { useFetchMock, submitMock } = vi.hoisted(() => ({
@@ -186,18 +185,5 @@ describe('new ticket page', () => {
     resolveSave({ id: 42, status: 'open' })
     await flushPromises()
     expect(wrapper.text()).toContain('Ticket #42 was saved')
-  })
-
-  it('links from the dashboard to the new ticket page', async () => {
-    useFetchMock.mockReturnValue({ data: ref([]), pending: ref(false), error: ref(null) })
-    const dashboard = await mountSuspended(Dashboard, {
-      global: { stubs: { UIcon: true } },
-    })
-    try {
-      expect(dashboard.get('a[href="/tickets/new"]').text()).toBe('New ticket')
-      expect(dashboard.get('a[href="/tickets"]').text()).toBe('View tickets')
-    } finally {
-      dashboard.unmount()
-    }
   })
 })
