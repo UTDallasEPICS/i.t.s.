@@ -8,8 +8,9 @@
 //
 // The shell now loads the current user from /api/me to render the account
 // dropdown, so this test mocks useFetch (following the pattern used by the
-// page tests) instead of reaching the network. No database, env file, email,
-// or browser is involved.
+// page tests) instead of reaching the network. The global auth middleware also
+// calls authClient.useSession(), so that is stubbed to return a session. No
+// database, env file, email, or browser is involved.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
@@ -17,24 +18,45 @@ import { flushPromises } from '@vue/test-utils'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import App from '../../app/app.vue'
 
-const { useFetchMock } = vi.hoisted(() => ({
+const { useFetchMock, useSessionMock, signOutMock } = vi.hoisted(() => ({
   useFetchMock: vi.fn(),
+  useSessionMock: vi.fn(),
+  signOutMock: vi.fn(),
 }))
 
 // The shell's data dependency is /api/me; mock it so the component renders
 // without a real session endpoint.
 mockNuxtImport('useFetch', () => useFetchMock)
 
-function meState(overrides: { isAdmin?: boolean; image?: string | null } = {}) {
+// Stub the auth client so the global auth middleware sees a session instead of
+// crashing on the mocked useFetch or redirecting to /auth.
+vi.mock('../../app/utils/auth-client', () => ({
+  authClient: {
+    useSession: useSessionMock,
+    signOut: signOutMock,
+  },
+}))
+
+// A signed-in session so the auth middleware lets the shell render.
+useSessionMock.mockResolvedValue({ data: ref({ user: { id: 'user-1' } }) })
+
+function meState(overrides: {
+  isAdmin?: boolean
+  image?: string | null
+  user?: { id: string; name: string; email: string; image: string | null } | null
+} = {}) {
   return {
     data: ref({
       isAdmin: overrides.isAdmin ?? false,
-      user: {
-        id: 'user-1',
-        name: 'Test User',
-        email: 'user@example.com',
-        image: overrides.image === undefined ? 'users/user-1/images/profile' : overrides.image,
-      },
+      user:
+        overrides.user === undefined
+          ? {
+              id: 'user-1',
+              name: 'Test User',
+              email: 'user@example.com',
+              image: overrides.image === undefined ? 'users/user-1/images/profile' : overrides.image,
+            }
+          : overrides.user,
     }),
     pending: ref(false),
     error: ref(null),
@@ -103,6 +125,24 @@ describe('application shell (app.vue)', () => {
     // Assert: the ticket navigation lives in the top bar, not the dashboard page.
     expect(hrefs(wrapper)).toContain('/tickets')
     expect(hrefs(wrapper)).toContain('/tickets/new')
+  })
+
+  it('hides ticket navigation until the user is authenticated', async () => {
+    // Act: no current user yet (session still loading).
+    useFetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('/api/me')) {
+        return meState({ user: null })
+      }
+      return { data: ref(null), pending: ref(false), error: ref(null), refresh: vi.fn() }
+    })
+    const wrapper = await mountSuspended(App, {
+      global: { stubs: { NuxtPage: true } },
+    })
+    await flushPromises()
+
+    // Assert: no ticket navigation while unauthenticated.
+    expect(wrapper.find('a[href="/tickets"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/tickets/new"]').exists()).toBe(false)
   })
 
   it('hides "Manage users" from non-admin users', async () => {

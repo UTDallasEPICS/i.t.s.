@@ -33,6 +33,22 @@
     return user.value?.image ? `/api/users/${user.value.id}/profile` : undefined
   }
 
+  // Fall back to the user's initials when no profile picture is set.
+  const userInitials = computed(() => {
+    const name = user.value?.name ?? ''
+    return name
+      .split(' ')
+      .map((word) => word.charAt(0))
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || '?'
+  })
+
+  // Gradient background for the initials-only avatar, keyed off the theme color.
+  const avatarGradient = computed(() =>
+    isDark.value ? 'from-primary-500 to-primary-800' : 'from-primary-400 to-primary-600',
+  )
+
   function handleImageUpload(event: Event) {
     const target = event.target as HTMLInputElement
     const files = target.files as FileList
@@ -123,9 +139,19 @@
           </NuxtLink>
 
           <div class="flex items-center gap-2">
-            <UButton to="/tickets" variant="outline">View tickets</UButton>
-            <UButton to="/tickets/new">New ticket</UButton>
+            <!-- Ticket navigation only appears once the user is authenticated. -->
+            <UButton v-if="user" to="/tickets" variant="outline">View tickets</UButton>
+            <UButton v-if="user" to="/tickets/new">New ticket</UButton>
             <UButton v-if="isAdmin" to="/admin" variant="outline">Manage users</UButton>
+
+            <!-- Theme toggle sits to the left of the profile/account button. -->
+            <UButton
+              :icon="isDark ? 'i-heroicons-moon-20-solid' : 'i-heroicons-sun-20-solid'"
+              color="neutral"
+              variant="ghost"
+              @click="isDark = !isDark"
+              aria-label="Toggle Theme"
+            />
 
             <UDropdownMenu
               v-if="user && !pending"
@@ -139,10 +165,18 @@
                   aria-label="Account"
                 >
                   <UAvatar
+                    v-if="user?.image"
                     :src="profileImageUrl()"
                     :alt="user.name"
                     class="h-8 w-8 rounded-full"
                   />
+                  <div
+                    v-else
+                    class="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
+                    :class="avatarGradient"
+                  >
+                    {{ userInitials }}
+                  </div>
                   <UIcon
                     name="i-heroicons-chevron-down-20-solid"
                     class="ml-1 h-4 w-4"
@@ -151,14 +185,6 @@
                 </UButton>
               </template>
             </UDropdownMenu>
-
-            <UButton
-              :icon="isDark ? 'i-heroicons-moon-20-solid' : 'i-heroicons-sun-20-solid'"
-              color="neutral"
-              variant="ghost"
-              @click="isDark = !isDark"
-              aria-label="Toggle Theme"
-            />
           </div>
         </UContainer>
       </header>

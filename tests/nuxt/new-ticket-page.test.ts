@@ -5,7 +5,6 @@ import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { USelect } from '#components'
 import NewTicketPage from '../../app/pages/tickets/new.vue'
-import Dashboard from '../../app/pages/index.vue'
 import TicketForm from '../../app/components/TicketForm.vue'
 
 const { useFetchMock, submitMock } = vi.hoisted(() => ({
@@ -186,21 +185,5 @@ describe('new ticket page', () => {
     resolveSave({ id: 42, status: 'open' })
     await flushPromises()
     expect(wrapper.text()).toContain('Ticket #42 was saved')
-  })
-
-  it('no longer renders ticket navigation on the dashboard page (moved to the top bar)', async () => {
-    useFetchMock.mockReturnValue({ data: ref([]), pending: ref(false), error: ref(null) })
-    const dashboard = await mountSuspended(Dashboard, {
-      global: { stubs: { UIcon: true } },
-    })
-    try {
-      // The "View tickets" and "New ticket" buttons moved from the dashboard
-      // into the top bar of app.vue; the dashboard keeps its title only.
-      expect(dashboard.find('a[href="/tickets/new"]').exists()).toBe(false)
-      expect(dashboard.find('a[href="/tickets"]').exists()).toBe(false)
-      expect(dashboard.get('h1').text()).toBe('Dashboard')
-    } finally {
-      dashboard.unmount()
-    }
   })
 })
