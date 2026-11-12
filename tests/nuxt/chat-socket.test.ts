@@ -175,7 +175,7 @@ describe('chat socket open', () => {
     chatSocketHooks.open!(peer)
 
     publishThreadCreated(
-      { id: 9, projectId: 1, createdAt: new Date('2026-10-23T12:00:00Z'), closedAt: null },
+      { id: 9, name: null, projectId: 1, createdAt: new Date('2026-10-23T12:00:00Z'), closedAt: null },
       ['member'],
     )
 
@@ -184,6 +184,7 @@ describe('chat socket open', () => {
         type: 'thread.created',
         thread: {
           id: 9,
+          name: null,
           projectId: 1,
           createdAt: '2026-10-23T12:00:00.000Z',
           closedAt: null,

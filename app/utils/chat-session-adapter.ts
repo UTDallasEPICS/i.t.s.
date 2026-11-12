@@ -40,6 +40,7 @@ type SocketHub = {
   url: string
   createSocket: SocketFactory
   subscribers: Set<HubSubscriber>
+  observers: Set<(frame: ChatServerFrame) => void>
   socket?: WebSocket
   timer?: ReturnType<typeof setTimeout>
   attempts: number
@@ -82,6 +83,7 @@ function hubFor(url: string, createSocket: SocketFactory) {
       url,
       createSocket,
       subscribers: new Set(),
+      observers: new Set(),
       attempts: 0,
       openedBefore: false,
       status: 'offline',
@@ -92,6 +94,7 @@ function hubFor(url: string, createSocket: SocketFactory) {
 }
 
 function sendToSubscribers(hub: SocketHub, frame: ChatServerFrame) {
+  for (const observer of hub.observers) observer(frame)
   if (frame.type !== 'message.created') return
 
   for (const subscriber of hub.subscribers) {
@@ -165,7 +168,7 @@ function scheduleReconnect(hub: SocketHub) {
 }
 
 function releaseHub(hub: SocketHub, createSocket: SocketFactory) {
-  if (hub.subscribers.size > 0) return
+  if (hub.subscribers.size > 0 || hub.observers.size > 0) return
 
   if (hub.timer !== undefined) clearTimeout(hub.timer)
   hub.timer = undefined
@@ -173,6 +176,21 @@ function releaseHub(hub: SocketHub, createSocket: SocketFactory) {
   hub.socket = undefined
   socket?.close()
   hubsByTransport.get(createSocket)?.delete(hub.url)
+}
+
+export function subscribeSessionChatEvents(
+  observer: (frame: ChatServerFrame) => void,
+  options: SessionChatAdapterOptions = {},
+) {
+  const createSocket = options.createSocket ?? browserSocket
+  const url = socketUrl(options.origin ?? (typeof window === 'undefined' ? 'http://localhost:3000' : window.location.origin))
+  const hub = hubFor(url, createSocket)
+  hub.observers.add(observer)
+  if (!hub.socket && hub.timer === undefined) connect(hub)
+  return () => {
+    hub.observers.delete(observer)
+    releaseHub(hub, createSocket)
+  }
 }
 
 /**

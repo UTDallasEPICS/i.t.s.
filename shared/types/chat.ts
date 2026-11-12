@@ -8,6 +8,7 @@ export type ChatWireMessage = {
 
 export type ChatWireThread = {
   id: number
+  name: string | null
   projectId: number
   createdAt: string
   closedAt: string | null

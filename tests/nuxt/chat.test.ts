@@ -65,6 +65,18 @@ beforeEach(() => {
 afterAll(() => db.$client.close())
 
 describe('getOrCreateThread', () => {
+  it('reuses unnamed group DMs but permits named channels with the same members', async () => {
+    const first = await getOrCreateThread(input)
+    const second = await getOrCreateThread(input)
+    const channel = await getOrCreateThread({ ...input, name: 'Planning' })
+    const anotherChannel = await getOrCreateThread({ ...input, name: 'Support' })
+    const again = await getOrCreateThread(input)
+
+    expect(second.thread.id).toBe(first.thread.id)
+    expect(again.thread.id).toBe(first.thread.id)
+    expect(new Set([first.thread.id, channel.thread.id, anotherChannel.thread.id]).size).toBe(3)
+    expect(channel.thread.name).toBe('Planning')
+  })
   it('creates the thread, unique members, and initial message atomically', async () => {
     const result = await getOrCreateThread({ ...input, otherMembers: ['b', 'a', 'b'] })
     expect(result.created).toBe(true)

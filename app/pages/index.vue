@@ -95,6 +95,7 @@
       </div>
       <div class="flex flex-wrap justify-between gap-4 md:items-center">
         <UButton to="/tickets" variant="outline">View tickets</UButton>
+        <UButton to="/chat" variant="outline">Chat</UButton>
         <UButton to="/tickets/new">New ticket</UButton>
         <UButton v-if="isAdmin" to="/admin" variant="outline">Manage users</UButton>
         <UModal :open="isModalOpen">

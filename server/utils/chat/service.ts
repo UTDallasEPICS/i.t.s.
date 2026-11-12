@@ -29,6 +29,7 @@ export type ChatPageDirection = z.infer<typeof chatPageDirectionSchema>
 
 type CreateThreadInput = {
   projectId: insertChatThreadsSchema["projectId"],
+  name?: string,
   initialMessage: Omit<insertChatThreadMessagesSchema, "threadId" | "createdAt" | "id">,
   otherMembers: insertChatThreadMembersSchema["userId"][]
 }
@@ -47,14 +48,16 @@ export const getOrCreateThread = async (data: CreateThreadInput): Promise<Result
   const allMembers = [...new Set([...data.otherMembers, data.initialMessage.userId])]
 
   const result = db.transaction((trx): CreateThreadTransactionOutput => {
-    const existingThread = findOpenThreadWithThisSetOfMembers(trx, data.projectId, allMembers)
+    const existingThread = data.name === undefined
+      ? findOpenThreadWithThisSetOfMembers(trx, data.projectId, allMembers)
+      : null
     if (existingThread) {
       return { created: false, thread: existingThread }
     }
 
     const thread = trx
       .insert(chatThreads)
-      .values({ projectId: data.projectId })
+      .values({ projectId: data.projectId, name: data.name })
       .returning()
       .get()
     if (!thread) {

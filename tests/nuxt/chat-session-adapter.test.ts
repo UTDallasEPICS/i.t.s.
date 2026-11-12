@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionChatFetcher } from '../../app/utils/chat-session-adapter'
-import { createSessionChatAdapter } from '../../app/utils/chat-session-adapter'
+import { createSessionChatAdapter, subscribeSessionChatEvents } from '../../app/utils/chat-session-adapter'
 import type { ChatMessagePage, ChatSubscriptionHandlers } from '../../app/types/chat'
 
 class FakeSocket {
@@ -78,6 +78,24 @@ afterEach(() => {
 })
 
 describe('createSessionChatAdapter', () => {
+  it('shares one socket between the inbox and thread, retaining it until both unsubscribe', () => {
+    const { sockets, createSocket } = socketFactory()
+    const observer = vi.fn()
+    const stopInbox = subscribeSessionChatEvents(observer, { origin: 'https://its.example.com', createSocket })
+    const subscription = handlers()
+    const stopThread = createSessionChatAdapter(7, { origin: 'https://its.example.com', createSocket }).subscribe!(subscription)
+    expect(sockets).toHaveLength(1)
+    sockets[0]!.open()
+    sockets[0]!.receive({ type: 'ready' })
+    sockets[0]!.receive({ type: 'thread.created', thread: { id: 9 } })
+    sockets[0]!.receive({ type: 'message.created', message: message(1, 7) })
+    expect(observer).toHaveBeenCalledTimes(3)
+    expect(subscription.onMessage).toHaveBeenCalledExactlyOnceWith(message(1, 7))
+    stopThread()
+    expect(sockets[0]!.closed).toBe(false)
+    stopInbox()
+    expect(sockets[0]!.closed).toBe(true)
+  })
   it('loads history with an exclusive after cursor', async () => {
     const fetcher = vi.fn<SessionChatFetcher>(async () => emptyPage)
     const adapter = createSessionChatAdapter(7, { fetchImpl: fetcher })

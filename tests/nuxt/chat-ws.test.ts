@@ -5,6 +5,7 @@ import {
   publishChatMessage,
   publishThreadCreated,
   subscribePeer,
+  subscribeUserToThread,
   threadPeerCount,
   toWireMessage,
   toWireThread,
@@ -27,6 +28,7 @@ const row = {
 }
 
 const thread = {
+  name: null,
   id: 9,
   projectId: 1,
   createdAt: new Date('2026-10-23T12:00:00Z'),
@@ -34,6 +36,23 @@ const thread = {
 }
 
 describe('chat ws hub', () => {
+  it('adds every connected peer of a joining user without subscribing outsiders', () => {
+    const first = fakePeer('a')
+    const second = fakePeer('a')
+    const outsider = fakePeer('b')
+    subscribePeer('a', [], first)
+    subscribePeer('a', [], second)
+    subscribePeer('b', [], outsider)
+    subscribeUserToThread('a', 2)
+    publishChatMessage(2, toWireMessage(row))
+    expect(first.send).toHaveBeenCalledOnce()
+    expect(second.send).toHaveBeenCalledOnce()
+    expect(outsider.send).not.toHaveBeenCalled()
+    unsubscribePeer(first)
+    unsubscribePeer(second)
+    unsubscribePeer(outsider)
+    expect(threadPeerCount(2)).toBe(0)
+  })
   it('serializes messages and threads for the wire', () => {
     expect(toWireMessage(row)).toEqual({
       id: 1,
@@ -44,6 +63,7 @@ describe('chat ws hub', () => {
     })
     expect(toWireThread(thread)).toEqual({
       id: 9,
+      name: null,
       projectId: 1,
       createdAt: '2026-10-23T12:00:00.000Z',
       closedAt: null,

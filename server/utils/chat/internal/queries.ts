@@ -41,6 +41,7 @@ export const findOpenThreadWithThisSetOfMembers = (
       .where(
         and(
           eq(chatThreads.projectId, projectId),
+          isNull(chatThreads.name),
           isNull(chatThreads.closedAt),
           inArray(chatThreads.id, matchingThreadIdSubquery),
         ),
