@@ -44,11 +44,6 @@
       .toUpperCase() || '?'
   })
 
-  // Gradient background for the initials-only avatar, keyed off the theme color.
-  const avatarGradient = computed(() =>
-    isDark.value ? 'from-primary-500 to-primary-800' : 'from-primary-400 to-primary-600',
-  )
-
   function handleImageUpload(event: Event) {
     const target = event.target as HTMLInputElement
     const files = target.files as FileList
@@ -139,10 +134,10 @@
           </NuxtLink>
 
           <div class="flex items-center gap-2">
-            <!-- Ticket navigation only appears once the user is authenticated. -->
-            <UButton v-if="user" to="/tickets">View tickets</UButton>
-            <UButton v-if="user" to="/tickets/new">New ticket</UButton>
-            <UButton v-if="isAdmin" to="/admin">Manage users</UButton>
+            <!-- Ticket navigation only appears once the user is authenticated. Neutral buttons (no color). -->
+            <UButton v-if="user" to="/tickets" variant="ghost">View tickets</UButton>
+            <UButton v-if="user" to="/tickets/new" variant="ghost">New ticket</UButton>
+            <UButton v-if="isAdmin" to="/admin" variant="ghost">Manage users</UButton>
 
             <!-- Theme toggle sits to the left of the profile/account button. -->
             <UButton
@@ -172,8 +167,7 @@
                   />
                   <div
                     v-else
-                    class="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
-                    :class="avatarGradient"
+                    class="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200"
                   >
                     {{ userInitials }}
                   </div>
