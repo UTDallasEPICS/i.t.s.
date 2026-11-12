@@ -22,6 +22,10 @@ export function useChatThread(adapter: ChatAdapter) {
   const loadingOlder = ref(false)
 
   let unsubscribe: (() => void) | undefined
+  let historyLoaded = false
+  let historyCursor = 0
+  let resyncPending = false
+  let resyncing = false
 
   const lastMessageId = computed(() => messages.value[messages.value.length - 1]?.id ?? 0)
 
@@ -36,10 +40,11 @@ export function useChatThread(adapter: ChatAdapter) {
     messages.value = [...messages.value, ...fresh].sort((a, b) => a.id - b.id)
   }
 
-  async function loadHistory(after?: number) {
-    const page = await adapter.loadMessages(after === undefined ? undefined : { after })
+  async function loadHistory() {
+    const page = await adapter.loadMessages()
     mergeMessages(page.messages)
-    if (after === undefined) hasMore.value = page.metadata.hasMore
+    historyCursor = Math.max(historyCursor, ...page.messages.map(message => message.id))
+    hasMore.value = page.metadata.hasMore
   }
 
   /** Fetches the page before the oldest loaded message, for scroll-up. */
@@ -60,19 +65,40 @@ export function useChatThread(adapter: ChatAdapter) {
     }
   }
 
-  /** Drains the reconnect gap; the API caps a page, so keep asking until done. */
+  /** Only HTTP history advances this cursor: a newer live event may hide a gap. */
   async function catchUp() {
-    let cursor = lastMessageId.value || undefined
-
-    // Guard against a server that keeps reporting hasMore without yielding rows.
-    for (let page = 0; page < 100; page += 1) {
+    // Bound each batch, not the total gap: live traffic can leave this cursor far behind.
+    for (let page = 0; page < 100 && historyLoaded; page += 1) {
+      const cursor = historyCursor || undefined
       const result = await adapter.loadMessages(cursor === undefined ? undefined : { after: cursor })
       mergeMessages(result.messages)
+      historyCursor = Math.max(historyCursor, ...result.messages.map(message => message.id))
 
-      const newestId = result.messages[result.messages.length - 1]?.id
-      if (newestId !== undefined) cursor = newestId
+      // A broken hasMore response must not keep scheduling batches forever.
+      if (!result.metadata.hasMore || historyCursor <= (cursor ?? 0)) return false
+    }
+    return historyLoaded
+  }
 
-      if (!result.metadata.hasMore || result.messages.length === 0) return
+  async function resync() {
+    resyncPending = true
+    if (!historyLoaded || resyncing) return
+    resyncing = true
+    try {
+      while (resyncPending && historyLoaded) {
+        resyncPending = false
+        try {
+          if (await catchUp()) {
+            resyncPending = true
+            // Let rendering and newer ready frames run between advancing batches.
+            await new Promise(resolve => setTimeout(resolve, 0))
+          }
+        } catch {
+          // Only retry if another ready was explicitly queued during this request.
+        }
+      }
+    } finally {
+      resyncing = false
     }
   }
 
@@ -88,15 +114,7 @@ export function useChatThread(adapter: ChatAdapter) {
       onStatusChange: (status) => {
         connection.value = status
       },
-      // The socket only carries messages sent after it connected, so a restored
-      // connection has to fetch the gap explicitly.
-      onResync: async () => {
-        try {
-          await catchUp()
-        } catch {
-          // Keep the thread usable; the next reconnect tries again.
-        }
-      },
+      onResync: resync,
     })
   }
 
@@ -110,6 +128,8 @@ export function useChatThread(adapter: ChatAdapter) {
 
     try {
       await loadHistory()
+      historyLoaded = true
+      if (resyncPending) await resync()
       loadState.value = 'ready'
     } catch {
       stop()
@@ -143,6 +163,8 @@ export function useChatThread(adapter: ChatAdapter) {
   }
 
   function stop() {
+    historyLoaded = false
+    resyncPending = false
     unsubscribe?.()
     unsubscribe = undefined
   }

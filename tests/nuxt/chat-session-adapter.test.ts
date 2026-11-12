@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionChatFetcher } from '../../app/utils/chat-session-adapter'
 import { createSessionChatAdapter, subscribeSessionChatEvents } from '../../app/utils/chat-session-adapter'
 import type { ChatMessagePage, ChatSubscriptionHandlers } from '../../app/types/chat'
+import { useChatThread } from '../../app/composables/useChatThread'
 
 class FakeSocket {
   private listeners = new Map<string, Set<(event: never) => void>>()
@@ -78,6 +79,37 @@ afterEach(() => {
 })
 
 describe('createSessionChatAdapter', () => {
+  it.each(['before history', 'after history'])('reconciles initial server readiness %s without skipping an intervening live message', async (readyAt) => {
+    const { sockets, createSocket } = socketFactory()
+    let resolveHistory!: (value: ChatMessagePage) => void
+    const fetcher = vi.fn<SessionChatFetcher>()
+      .mockReturnValueOnce(new Promise<ChatMessagePage>((resolve) => { resolveHistory = resolve }))
+      .mockResolvedValueOnce({ messages: [message(2, 7)], metadata: { hasMore: true } })
+      .mockResolvedValueOnce({ messages: [message(3, 7)], metadata: { hasMore: false } })
+    const stopInbox = subscribeSessionChatEvents(vi.fn(), { origin: 'https://its.example.com', createSocket })
+    const thread = useChatThread(createSessionChatAdapter(7, { origin: 'https://its.example.com', createSocket, fetchImpl: fetcher }))
+    const starting = thread.start()
+    sockets[0]!.open()
+    if (readyAt === 'before history') {
+      sockets[0]!.receive({ type: 'ready' })
+      sockets[0]!.receive({ type: 'message.created', message: message(3, 7) })
+      expect(fetcher).toHaveBeenCalledTimes(1)
+    }
+    resolveHistory({ messages: [message(1, 7)], metadata: { hasMore: false } })
+    await starting
+    if (readyAt === 'after history') {
+      expect(fetcher).toHaveBeenCalledTimes(1)
+      sockets[0]!.receive({ type: 'ready' })
+      sockets[0]!.receive({ type: 'message.created', message: message(3, 7) })
+    }
+    await vi.waitFor(() => expect(thread.messages.value.map(message => message.id)).toEqual([1, 2, 3]))
+    expect(fetcher).toHaveBeenNthCalledWith(2, '/api/chat/threads/7/messages', { query: { after: 1 } })
+    expect(fetcher).toHaveBeenNthCalledWith(3, '/api/chat/threads/7/messages', { query: { after: 2 } })
+    expect(sockets).toHaveLength(1)
+    thread.stop()
+    stopInbox()
+  })
+
   it('shares one socket between the inbox and thread, retaining it until both unsubscribe', () => {
     const { sockets, createSocket } = socketFactory()
     const observer = vi.fn()
@@ -210,6 +242,8 @@ describe('createSessionChatAdapter', () => {
 
     sockets[0]?.open()
 
+    sockets[0]?.receive({ type: 'ready' })
+
     const late = handlers()
     const unsubscribeLate = createSessionChatAdapter(8, {
       origin: 'https://its.example.com',
@@ -217,6 +251,7 @@ describe('createSessionChatAdapter', () => {
     }).subscribe?.(late)
 
     expect(late.onStatusChange).toHaveBeenLastCalledWith('live')
+    expect(late.onResync).toHaveBeenCalledOnce()
     expect(sockets).toHaveLength(1)
 
     unsubscribeFirst?.()
@@ -263,6 +298,8 @@ describe('createSessionChatAdapter', () => {
 
     sockets[1]?.open()
     expect(first.onStatusChange).toHaveBeenLastCalledWith('live')
+    expect(first.onResync).not.toHaveBeenCalled()
+    sockets[1]?.receive({ type: 'ready' })
     expect(first.onResync).toHaveBeenCalledOnce()
     expect(second.onResync).toHaveBeenCalledOnce()
   })

@@ -23,7 +23,7 @@
 
   const { data: session } = await authClient.useSession(useFetch)
   const currentUser = computed(() => session.value?.user)
-  const { data: chatContext } = await useFetch('/api/chat/context')
+  const { data: chatContext, error: contextError, pending: contextPending, refresh: refreshContext } = await useFetch('/api/chat/context')
   const isAdmin = computed(() => chatContext.value?.isAdmin === true)
   const { data: conversations, pending, error, refresh } = await useFetch<Conversation[]>('/api/chat/conversations')
   const route = useRoute()
@@ -53,6 +53,10 @@
   const creating = ref(false)
   const showCreate = computed(() => threadParam.value === 'new' && isAdmin.value)
   const { data: options, error: optionsError, refresh: refreshOptions } = await useFetch<{ projects: Project[], people: Person[] }>('/api/chat/conversations/options', { immediate: isAdmin.value, watch: false })
+  async function retryContext() {
+    await refreshContext()
+    if (!contextError.value && isAdmin.value) await refreshOptions()
+  }
   const projects = computed(() => options.value?.projects ?? [])
   const people = computed(() => (options.value?.people ?? []).filter(person => person.id !== currentUser.value?.id))
   const projectId = ref<number>()
@@ -60,13 +64,21 @@
   const memberIds = ref<string[]>([])
   const message = ref('')
   const canCreate = computed(() => !!projectId.value && memberIds.value.length > 0 && !!message.value.trim() && message.value.length <= CHAT_MESSAGE_MAX_LENGTH && !creating.value)
+  let createGeneration = 0
+  watch(() => route.fullPath, () => {
+    createGeneration += 1
+    creating.value = false
+  }, { flush: 'sync' })
   let unsubscribeEvents: (() => void) | undefined
   onMounted(() => {
     unsubscribeEvents = subscribeSessionChatEvents((frame) => {
       if (frame.type === 'ready' || frame.type === 'message.created' || frame.type === 'thread.created') void refresh()
     })
   })
-  onScopeDispose(() => unsubscribeEvents?.())
+  onScopeDispose(() => {
+    createGeneration += 1
+    unsubscribeEvents?.()
+  })
   const eligiblePeople = computed(() => {
     const orgId = projects.value.find(project => project.id === projectId.value)?.orgId
     return people.value.filter(person => person.orgId === null || (orgId && person.orgId === orgId))
@@ -101,25 +113,32 @@
 
   async function createConversation() {
     if (!canCreate.value) return
+    const generation = ++createGeneration
+    const submitted = { projectId: projectId.value, name: name.value, memberIds: [...memberIds.value], message: message.value }
     actionError.value = ''
     creating.value = true
     try {
       const result = await $fetch<{ thread: { id: number } }>('/api/chat/conversations', {
         method: 'POST', body: {
-          projectId: projectId.value, memberIds: memberIds.value,
-          name: name.value.trim() || undefined, message: message.value.trim(),
+          projectId: submitted.projectId, memberIds: submitted.memberIds,
+          name: submitted.name.trim() || undefined, message: submitted.message.trim(),
         },
       })
-      name.value = ''
-      message.value = ''
-      memberIds.value = []
+      if (generation !== createGeneration) return
+      if (projectId.value === submitted.projectId && name.value === submitted.name && message.value === submitted.message
+        && memberIds.value.length === submitted.memberIds.length && memberIds.value.every((id, index) => id === submitted.memberIds[index])) {
+        name.value = ''
+        message.value = ''
+        memberIds.value = []
+      }
       await refresh()
+      if (generation !== createGeneration) return
       activeTab.value = 'mine'
       await navigateTo(`/chat/${result.thread.id}`)
     } catch {
-      actionError.value = 'Could not start the conversation. Check the project and selected members, then try again.'
+      if (generation === createGeneration) actionError.value = 'Could not start the conversation. Check the project and selected members, then try again.'
     } finally {
-      creating.value = false
+      if (generation === createGeneration) creating.value = false
     }
   }
   function onCreateKeydown(event: KeyboardEvent) {
@@ -157,6 +176,9 @@
     </header>
 
     <UAlert v-if="actionError" color="error" variant="soft" :description="actionError" class="mb-4" />
+    <UAlert v-if="contextError" role="alert" color="error" variant="soft" description="Could not load conversation permissions." class="mb-4">
+      <template #actions><UButton type="button" variant="soft" :loading="contextPending" @click="retryContext">Try again</UButton></template>
+    </UAlert>
 
     <div class="grid gap-5 md:grid-cols-[280px_minmax(0,1fr)]">
       <section aria-label="Conversation list" class="space-y-2">
