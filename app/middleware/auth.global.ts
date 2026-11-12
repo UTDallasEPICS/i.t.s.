@@ -7,7 +7,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (session.value) {
     if (to.path === '/auth') {
-      return navigateTo('/')
+      return navigateTo('/tickets')
     }
   } else {
     if (to.path !== '/auth') {
