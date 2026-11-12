@@ -123,5 +123,6 @@ describe('partner conversations', () => {
     const result = await (await request('/api/chat/conversations', 'npts')).json()
     expect(result.map((thread: { name: string }) => thread.name)).toEqual(['Recent message', 'No messages', 'Older message'])
     expect(result[0].latestMessage.plainTextBody).toBe('Newest')
+    expect(result[0].latestMessage.senderName).toBe('NPTS')
   })
 })

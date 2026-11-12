@@ -16,7 +16,7 @@
     isMember: boolean
     closedAt: string | null
     members: { id: string, name: string, organizationName: string | null }[]
-    latestMessage: { id: number, plainTextBody: string } | null
+    latestMessage: { id: number, plainTextBody: string, senderName: string } | null
   }
   type Person = { id: string, name: string, email: string, orgId: string | null, organizationName: string | null }
   type Project = { id: number, name: string, orgId: string }
@@ -111,6 +111,10 @@
     return thread.name ?? (thread.members.filter(member => member.id !== currentUser.value?.id).map(member => member.name).join(', ') || 'Group conversation')
   }
 
+  function firstName(fullName: string) {
+    return fullName.split(' ')[0] ?? fullName
+  }
+
   async function createConversation() {
     if (!canCreate.value) return
     const generation = ++createGeneration
@@ -193,7 +197,7 @@
           >
           <span class="block truncate text-sm font-semibold">{{ conversationTitle(thread) }}</span>
           <span class="text-muted mt-1 block truncate text-xs">{{ thread.projectName }} · {{ thread.organizationName }}</span>
-          <span v-if="thread.latestMessage" class="text-muted mt-2 block truncate text-xs">{{ thread.latestMessage.plainTextBody }}</span>
+          <span v-if="thread.latestMessage" class="text-muted mt-2 block truncate text-xs">{{ firstName(thread.latestMessage.senderName) }}: {{ thread.latestMessage.plainTextBody }}</span>
           <span v-if="!thread.isMember" class="text-muted mt-2 block text-xs">Preview · not joined</span>
         </NuxtLink>
       </section>
