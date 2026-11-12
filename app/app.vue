@@ -26,13 +26,28 @@
           </NuxtLink>
 
           <div class="flex items-center gap-2">
+            <!--
+              Both icons stay mounted. During SSR a system preference is the
+              string "system", so a single icon chosen from colorMode.value is
+              the sun and never updates after the client resolves that to dark.
+            -->
             <UButton
-              :icon="isDark ? 'i-heroicons-moon-20-solid' : 'i-heroicons-sun-20-solid'"
               color="neutral"
               variant="ghost"
-              @click="isDark = !isDark"
               aria-label="Toggle Theme"
-            />
+              @click="isDark = !isDark"
+            >
+              <template #leading="{ ui }">
+                <UIcon
+                  name="i-heroicons-moon-20-solid"
+                  :class="ui.leadingIcon({ class: 'hidden dark:inline-block' })"
+                />
+                <UIcon
+                  name="i-heroicons-sun-20-solid"
+                  :class="ui.leadingIcon({ class: 'dark:hidden' })"
+                />
+              </template>
+            </UButton>
           </div>
         </UContainer>
       </header>
