@@ -22,7 +22,7 @@
         <UContainer class="flex h-16 items-center justify-between">
           <NuxtLink to="/" class="flex items-center gap-2 text-xl font-bold">
             <UIcon name="i-heroicons-cube-transparent" class="text-primary-500 h-8 w-8" />
-            <span>Nuxt Template</span>
+            <span>ITS</span>
           </NuxtLink>
 
           <div class="flex items-center gap-2">

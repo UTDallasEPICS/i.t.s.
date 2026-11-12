@@ -2,7 +2,7 @@
 
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers give your AI coding
 assistant live access to documentation and tools. These three are useful when working in this
-template:
+project:
 
 | Server          | URL                                                          | What it's for              |
 | --------------- | ------------------------------------------------------------ | -------------------------- |
