@@ -188,14 +188,17 @@ describe('new ticket page', () => {
     expect(wrapper.text()).toContain('Ticket #42 was saved')
   })
 
-  it('links from the dashboard to the new ticket page', async () => {
+  it('no longer renders ticket navigation on the dashboard page (moved to the top bar)', async () => {
     useFetchMock.mockReturnValue({ data: ref([]), pending: ref(false), error: ref(null) })
     const dashboard = await mountSuspended(Dashboard, {
       global: { stubs: { UIcon: true } },
     })
     try {
-      expect(dashboard.get('a[href="/tickets/new"]').text()).toBe('New ticket')
-      expect(dashboard.get('a[href="/tickets"]').text()).toBe('View tickets')
+      // The "View tickets" and "New ticket" buttons moved from the dashboard
+      // into the top bar of app.vue; the dashboard keeps its title only.
+      expect(dashboard.find('a[href="/tickets/new"]').exists()).toBe(false)
+      expect(dashboard.find('a[href="/tickets"]').exists()).toBe(false)
+      expect(dashboard.get('h1').text()).toBe('Dashboard')
     } finally {
       dashboard.unmount()
     }
