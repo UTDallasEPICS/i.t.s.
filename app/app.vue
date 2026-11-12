@@ -140,9 +140,9 @@
 
           <div class="flex items-center gap-2">
             <!-- Ticket navigation only appears once the user is authenticated. -->
-            <UButton v-if="user" to="/tickets" variant="outline">View tickets</UButton>
+            <UButton v-if="user" to="/tickets">View tickets</UButton>
             <UButton v-if="user" to="/tickets/new">New ticket</UButton>
-            <UButton v-if="isAdmin" to="/admin" variant="outline">Manage users</UButton>
+            <UButton v-if="isAdmin" to="/admin">Manage users</UButton>
 
             <!-- Theme toggle sits to the left of the profile/account button. -->
             <UButton
