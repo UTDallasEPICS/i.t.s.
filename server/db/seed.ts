@@ -110,6 +110,7 @@ async function seedProject(partnerId: string) {
       name: 'My Test Project',
       githubRepo: GITHUB_REPO_ITS,
       projectPartnerId: partnerId,
+      siteTag: 'sample-site-tag',
     })
     .returning()
 
