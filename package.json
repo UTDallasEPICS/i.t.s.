@@ -27,6 +27,8 @@
     "@nuxt/image": "2.1.0",
     "@nuxt/ui": "^4.11.0",
     "@types/nodemailer": "^8.0.1",
+    "altcha": "^3.5.0",
+    "altcha-lib": "^2.8.0",
     "better-auth": "1.6.23",
     "crossws": "0.3.5",
     "dotenv": "^17.4.2",

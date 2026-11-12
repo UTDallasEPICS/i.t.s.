@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { project, tickets } from '../../db/schema'
 import { db } from '../../utils/db'
 import { checkRateLimit } from '../../utils/rateLimit'
+import { verifyAltcha } from '../../utils/altcha'
 
 // Accept only the fields the widget form sends. Project, status, author and
 // timestamps are decided by the server, not the caller.
@@ -19,6 +20,8 @@ const widgetTicketSchema = z.strictObject({
   siteTag: z.string().trim().min(1).max(100),
   title: z.string().trim().min(1, 'Enter a ticket title.').max(200),
   description: z.string().trim().min(1, 'Describe the issue.').max(5000),
+  // ALTCHA payload from the widget (Base64 JSON). Checked below, not trusted.
+  altcha: z.string().min(1).max(10_000),
 })
 
 // Limits from ADR 006. Starting values; tune with real traffic.
@@ -48,6 +51,12 @@ export default defineEventHandler(async (event) => {
   if (limited) {
     setResponseHeader(event, 'Retry-After', limited.retryAfter)
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests' })
+  }
+
+  // Proof that a browser solved our challenge (ADR 005). Checked after the rate
+  // limit, so bots can't make us run many verifications.
+  if (!(await verifyAltcha(result.data.altcha))) {
+    throw createError({ statusCode: 400, statusMessage: 'Verification failed' })
   }
 
   // Find the project this widget belongs to.

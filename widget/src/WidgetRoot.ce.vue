@@ -37,7 +37,7 @@
   }
 
   // The form only reports what the user typed; the widget sends it to ITS.
-  async function submitTicket(ticket: { title: string; description: string }) {
+  async function submitTicket(ticket: { title: string; description: string; altcha: string }) {
     submitting.value = true
     message.value = ''
     try {
@@ -92,7 +92,7 @@
       </div>
 
       <template v-else>
-        <WidgetTicketForm :submitting="submitting" @submit="submitTicket" />
+        <WidgetTicketForm :submitting="submitting" :api-base="apiBase" @submit="submitTicket" />
         <p v-if="message" class="message error">{{ message }}</p>
       </template>
     </div>

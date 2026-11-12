@@ -7,6 +7,10 @@ import { db } from '../../server/utils/db'
 import { resetRateLimits } from '../../server/utils/rateLimit'
 import widgetTicketsHandler from '../../server/api/widget/tickets.post'
 
+// ALTCHA itself is tested in altcha.test.ts. Here we only control its answer.
+const { verifyAltcha } = vi.hoisted(() => ({ verifyAltcha: vi.fn() }))
+vi.mock('../../server/utils/altcha', () => ({ verifyAltcha }))
+
 // Use an in-memory database, same as the partner ticket API tests.
 vi.mock('../../server/utils/db', async () => {
   const { default: Database } = await import('better-sqlite3')
@@ -22,6 +26,7 @@ const validTicket = {
   siteTag: 'site-a',
   title: '  Registration form is broken  ',
   description: '  Nothing happens when I click Submit.  ',
+  altcha: 'solved-payload',
 }
 
 // No session middleware here: the widget endpoint must work for anonymous users.
@@ -48,6 +53,8 @@ function expectNoTickets() {
 describe('POST /api/widget/tickets', () => {
   beforeEach(() => {
     resetRateLimits()
+    verifyAltcha.mockReset()
+    verifyAltcha.mockResolvedValue(true)
     db.delete(tickets).run()
     db.delete(project).run()
     db.delete(organization).run()
@@ -111,6 +118,8 @@ describe('POST /api/widget/tickets', () => {
     ['too long title', { ...validTicket, title: 'a'.repeat(201) }],
     ['missing description', { siteTag: 'site-a', title: 'Issue' }],
     ['too long description', { ...validTicket, description: 'a'.repeat(5001) }],
+    ['missing altcha', { siteTag: 'site-a', title: 'Issue', description: 'Details' }],
+    ['blank altcha', { ...validTicket, altcha: '' }],
   ])('rejects invalid input: %s', async (_name, body) => {
     const response = await request(body)
     expect(response.status).toBe(400)
@@ -158,5 +167,21 @@ describe('POST /api/widget/tickets', () => {
     }
     const blocked = await request(validTicket, { 'x-forwarded-for': '10.0.0.99, 9.9.9.9' })
     expect(blocked.status).toBe(429)
+  })
+
+  it('rejects a ticket when the ALTCHA check fails', async () => {
+    verifyAltcha.mockResolvedValue(false)
+    const response = await request()
+    expect(response.status).toBe(400)
+    expect(verifyAltcha).toHaveBeenCalledWith('solved-payload')
+    expectNoTickets()
+  })
+
+  it('checks the rate limit before running the ALTCHA check', async () => {
+    for (let i = 0; i < 3; i++) await request()
+    verifyAltcha.mockClear()
+
+    expect((await request()).status).toBe(429)
+    expect(verifyAltcha).not.toHaveBeenCalled()
   })
 })
