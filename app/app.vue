@@ -139,14 +139,26 @@
             <UButton v-if="user" to="/tickets/new" variant="ghost">New ticket</UButton>
             <UButton v-if="isAdmin" to="/admin" variant="ghost">Manage users</UButton>
 
-            <!-- Theme toggle sits to the left of the profile/account button. -->
+            <!-- Theme toggle sits to the left of the profile/account button. Both icons stay mounted so
+                 the icon reflects the resolved theme (including a "system" preference) instead of being
+                 fixed to the sun. -->
             <UButton
-              :icon="isDark ? 'i-heroicons-moon-20-solid' : 'i-heroicons-sun-20-solid'"
               color="neutral"
               variant="ghost"
-              @click="isDark = !isDark"
               aria-label="Toggle Theme"
-            />
+              @click="isDark = !isDark"
+            >
+              <template #leading="{ ui }">
+                <UIcon
+                  name="i-heroicons-moon-20-solid"
+                  :class="ui.leadingIcon({ class: 'hidden dark:inline-block' })"
+                />
+                <UIcon
+                  name="i-heroicons-sun-20-solid"
+                  :class="ui.leadingIcon({ class: 'dark:hidden' })"
+                />
+              </template>
+            </UButton>
 
             <UDropdownMenu
               v-if="user && !pending"
