@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, getTableColumns, inArray, sql } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
 import { chatThreadMembers, chatThreadMessages, chatThreads, organization, project, user } from '~~/server/db/schema'
 import { db } from '~~/server/utils/db'
@@ -23,12 +23,13 @@ export default defineEventHandler(async (event) => {
     .from(chatThreadMembers).innerJoin(user, eq(user.id, chatThreadMembers.userId))
     .leftJoin(organization, eq(user.orgId, organization.id))
     .where(inArray(chatThreadMembers.threadId, ids)).all()
-  const messages = db.select().from(chatThreadMessages)
-    .where(and(inArray(chatThreadMessages.threadId, ids), sql`${chatThreadMessages.id} = (
+  const messages = db.select(getTableColumns(chatThreadMessages)).from(chatThreads)
+    .innerJoin(chatThreadMessages, sql`${chatThreadMessages.id} = (
       SELECT m.id FROM chat_thread_messages m
-      WHERE m.thread_id = ${chatThreadMessages.threadId}
+      WHERE m.thread_id = ${chatThreads.id}
       ORDER BY m.created_at DESC, m.id DESC LIMIT 1
-    )`)).all()
+    )`)
+    .where(inArray(chatThreads.id, ids)).all()
   const latest = new Map<number, typeof messages[number]>()
   for (const message of messages) if (!latest.has(message.threadId)) latest.set(message.threadId, message)
 
