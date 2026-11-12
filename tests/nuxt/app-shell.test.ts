@@ -33,9 +33,9 @@ describe('application shell (app.vue)', () => {
       global: { stubs: { NuxtPage: true } },
     })
 
-    // Assert: the brand link shows "Nuxt Template" and targets "/".
+    // Assert: the brand link shows "ITS" and targets "/".
     const brandLink = wrapper.get('a')
-    expect(brandLink.text()).toContain('Nuxt Template')
+    expect(brandLink.text()).toContain('ITS')
     expect(brandLink.attributes('href')).toBe('/')
     expect(fetchSpy).not.toHaveBeenCalled()
   })

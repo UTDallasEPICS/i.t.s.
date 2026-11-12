@@ -1,6 +1,7 @@
-# Nuxt Template (Better Auth + Drizzle + SQLite)
+# NPTS Issue Tracking System
 
-A modern, production-ready Nuxt 4 template featuring a robust authentication system, ORM integration, and a clean UI foundation.
+The NPTS Issue Tracking System (ITS) is a ticket tracking application for NPTS project partners
+and developers, built on Nuxt 4 with Better Auth, Drizzle, and SQLite.
 
 ## Features
 
@@ -29,7 +30,7 @@ See the [Documentation](#documentation) section for topic guides. Otherwise, fol
 
 ```bash
 git clone <your-repo-url>
-cd nuxt-template
+cd ITS
 ```
 
 ### 2. Install dependencies
@@ -113,8 +114,8 @@ Topic guides live in the [`docs/`](docs/) directory:
 
 ## Testing
 
-This template ships with a small **Vitest** testing baseline and an example component test,
-so every project starts with a working `pnpm test` command and a reference to copy from.
+This project ships with a small **Vitest** testing baseline and an example component test,
+so the suite starts with a working `pnpm test` command and a reference to copy from.
 
 ```bash
 pnpm test        # run all tests once
@@ -132,7 +133,7 @@ that merge requests include a meaningful test for changed behavior.
 CI runs `pnpm test` automatically on every pull request and on pushes to `dev`/`stage`/`prod`
 (see `.github/workflows/test.yml`), so a broken or missing test is visible before it merges.
 
-> Browser/end-to-end testing (Playwright) is intentionally kept separate from this template.
+> Browser/end-to-end testing (Playwright) is intentionally kept separate from this project.
 
 ## GitHub Actions Configuration
 
