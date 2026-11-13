@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import Database from 'better-sqlite3'
-import { eq } from 'drizzle-orm'
+import { eq, isNull } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from './schema'
 
@@ -117,6 +117,85 @@ async function seedProject(partnerId: string) {
   return created
 }
 
+async function seedChatThreads() {
+  const partner = await seedProjectPartner()
+  const project = await seedProject(partner.id)
+
+  if (!project) return
+
+  const admin = await db.query.user.findFirst({
+    where: (u) => isNull(u.orgId),
+  })
+  const user = await db.query.user.findFirst({
+    where: (u, { eq }) => eq(u.email, USER_EMAIL),
+  })
+
+  if (!admin || !user) {
+    console.warn('Skipping chat seed: admin or seeded user not found.')
+    return
+  }
+
+  const threads = [
+    {
+      id: 1,
+      name: 'Community website',
+      projectId: project.id,
+      members: [admin.id, user.id],
+      messages: [
+        { userId: user.id, plainTextBody: 'Hi! We are preparing the community website for launch next week.' },
+        { userId: admin.id, plainTextBody: 'Great. Which part would you like us to take a look at first?' },
+        { userId: user.id, plainTextBody: 'The volunteer signup form. A few people said they could not finish submitting it on their phone.' },
+        { userId: admin.id, plainTextBody: 'Could you share the browser and the step where they got stuck? We can try to reproduce it.' },
+        { userId: user.id, plainTextBody: 'Safari on an iPhone. It happens after they select their availability and press Continue.' },
+        { userId: admin.id, plainTextBody: 'Thanks, that gives us a good starting point. We will check the mobile layout and validation.' },
+      ],
+    },
+    {
+      id: 2,
+      name: 'Volunteer onboarding',
+      projectId: project.id,
+      members: [admin.id, user.id],
+      messages: [
+        { userId: admin.id, plainTextBody: 'Can we review the new volunteer welcome email?' },
+      ],
+    },
+  ]
+
+  for (const thread of threads) {
+    const existing = await db.query.chatThreads.findFirst({
+      where: (t, { eq }) => eq(t.id, thread.id),
+    })
+
+    if (existing) {
+      console.log({ chatThread: existing })
+      continue
+    }
+
+    const [created] = await db
+      .insert(schema.chatThreads)
+      .values({ id: thread.id, name: thread.name, projectId: thread.projectId })
+      .returning()
+
+    if (!created) {
+      throw new Error(`failed to seed chat thread ${thread.id}`)
+    }
+
+    await db.insert(schema.chatThreadMembers).values(
+      thread.members.map(userId => ({ threadId: created.id, userId })),
+    )
+
+    await db.insert(schema.chatThreadMessages).values(
+      thread.messages.map((message, index) => ({
+        ...message,
+        threadId: created.id,
+        createdAt: new Date(Date.now() - (thread.messages.length - index) * 60_000),
+      })),
+    )
+
+    console.log({ chatThread: created, members: thread.members.length, messages: thread.messages.length })
+  }
+}
+
 async function main() {
   console.log('Start seeding...')
 
@@ -150,6 +229,8 @@ async function main() {
     await db.update(schema.user).set({ orgId: partner.id }).where(eq(schema.user.id, user.id))
     console.log({ user: { ...user, orgId: partner.id } })
   }
+
+  await seedChatThreads()
 
   console.log('Seeding finished.')
 }
