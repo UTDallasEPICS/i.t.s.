@@ -9,8 +9,9 @@ import {
   type selectChatThreadMessagesSchema,
   type selectChatThreadsSchema,
 } from '../../db/schema'
+import { eq } from 'drizzle-orm'
 import { db } from '../db'
-import { emitChatMessage, emitChatThreadCreated } from './events'
+import { emitChatMemberJoined, emitChatMessage, emitChatThreadCreated } from './events'
 import {
   findOpenThreadWithThisSetOfMembers,
   messageBelongsToThread,
@@ -104,6 +105,28 @@ export const getOrCreateThread = async (data: CreateThreadInput): Promise<Result
   }
 
   return { ok: true, value: result }
+}
+
+type JoinConversationInput = {
+  threadId: number,
+  userId: string,
+}
+
+export const joinConversation = async (data: JoinConversationInput): Promise<Result<{ threadId: number }, 'thread-not-found'>> => {
+  const thread = db.select().from(chatThreads).where(eq(chatThreads.id, data.threadId)).get()
+  if (!thread || thread.closedAt) {
+    return { ok: false, error: 'thread-not-found' }
+  }
+
+  db.insert(chatThreadMembers).values({ threadId: data.threadId, userId: data.userId }).onConflictDoNothing().run()
+
+  try {
+    await emitChatMemberJoined(data.userId, data.threadId)
+  } catch (error) {
+    console.error('[chat] failed to emit chat:member-joined', error)
+  }
+
+  return { ok: true, value: { threadId: data.threadId } }
 }
 
 export const sendMessage = async (data: insertChatThreadMessagesSchema): Promise<Result<selectChatThreadMessagesSchema, 'thread-not-found'>> => {
