@@ -90,7 +90,7 @@ describe('getOrCreateThread', () => {
     expect(emitChatThreadCreated).toHaveBeenCalledExactlyOnceWith(result.thread, ['b', 'a'])
   })
 
-  it('reuses the exact member set regardless of order without inserting another message', async () => {
+  it('reuses the exact member set and sends the message on reuse', async () => {
     const first = await getOrCreateThread(input)
     const second = await getOrCreateThread({
       ...input,
@@ -100,7 +100,7 @@ describe('getOrCreateThread', () => {
     expect(second).toEqual({ created: false, thread: first.thread })
     expect(emitChatThreadCreated).toHaveBeenCalledOnce()
     expect(db.select().from(chatThreads).all()).toHaveLength(1)
-    expect(db.select().from(chatThreadMessages).all()).toHaveLength(1)
+    expect(db.select().from(chatThreadMessages).all()).toHaveLength(2)
   })
 
   it('does not reuse a superset, subset, or different set with the same size', async () => {

@@ -44,7 +44,7 @@ type CreateThreadTransactionOutput =
   | { created: false, thread: selectChatThreadsSchema }
   | { created: true, thread: selectChatThreadsSchema, initialMessage: selectChatThreadMessagesSchema }
 
-export const getOrCreateThread = async (data: CreateThreadInput): Promise<Result<CreateThreadOutput, never>> => {
+export const getOrCreateThread = async (data: CreateThreadInput): Promise<Result<CreateThreadOutput, 'thread-not-found'>> => {
   const allMembers = [...new Set([...data.otherMembers, data.initialMessage.userId])]
 
   const result = db.transaction((trx): CreateThreadTransactionOutput => {
@@ -91,6 +91,15 @@ export const getOrCreateThread = async (data: CreateThreadInput): Promise<Result
       await emitChatMessage(result.initialMessage)
     } catch (error) {
       console.error('[chat] failed to emit chat:message', error)
+    }
+  } else {
+    const sent = await sendMessage({
+      threadId: result.thread.id,
+      userId: data.initialMessage.userId,
+      plainTextBody: data.initialMessage.plainTextBody,
+    })
+    if (!sent.ok) {
+      return { ok: false, error: 'thread-not-found' }
     }
   }
 

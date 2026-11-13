@@ -3,7 +3,7 @@ import { createError, defineEventHandler, readBody, setResponseStatus } from 'h3
 import { z } from 'zod'
 import { project, user } from '~~/server/db/schema'
 import { requireAdmin } from '~~/server/utils/authorization'
-import { getOrCreateThread, sendMessage } from '~~/server/utils/chat/service'
+import { getOrCreateThread } from '~~/server/utils/chat/service'
 import { db } from '~~/server/utils/db'
 import { requireUser } from '~~/server/utils/session'
 import { CHAT_MESSAGE_MAX_LENGTH } from '#shared/chat-limits'
@@ -40,10 +40,6 @@ export default defineEventHandler(async (event) => {
     otherMembers: memberIds,
   })
   if (!result.ok) throw createError({ statusCode: 500, statusMessage: 'Unable to create conversation' })
-  if (!result.value.created) {
-    const sent = await sendMessage({ threadId: result.value.thread.id, userId: currentUser.id, plainTextBody: data.message })
-    if (!sent.ok) throw createError({ statusCode: 404, statusMessage: 'Thread not found' })
-  }
   setResponseStatus(event, result.value.created ? 201 : 200)
   return result.value
 })
