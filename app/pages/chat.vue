@@ -6,26 +6,13 @@
   import { authClient } from '../utils/auth-client'
   import { selectProjectMembers } from '../utils/chat-member-selection'
   import type { ChatAdapter } from '../types/chat'
-
-  type Conversation = {
-    id: number
-    name: string | null
-    projectId: number
-    projectName: string
-    organizationName: string
-    isMember: boolean
-    closedAt: string | null
-    members: { id: string, name: string, organizationName: string | null }[]
-    latestMessage: { id: number, plainTextBody: string } | null
-  }
-  type Person = { id: string, name: string, email: string, orgId: string | null, organizationName: string | null }
-  type Project = { id: number, name: string, orgId: string }
+  import type { ConversationView, PersonView, ProjectView } from '#shared/types/chat'
 
   const { data: session } = await authClient.useSession(useFetch)
   const currentUser = computed(() => session.value?.user)
   const { data: chatContext, error: contextError, pending: contextPending, refresh: refreshContext } = await useFetch('/api/chat/context')
   const isAdmin = computed(() => chatContext.value?.isAdmin === true)
-  const { data: conversations, pending, error, refresh } = await useFetch<Conversation[]>('/api/chat/conversations')
+  const { data: conversations, pending, error, refresh } = await useFetch<ConversationView[]>('/api/chat/conversations')
   const route = useRoute()
   const threadParam = computed(() => 'threadId' in route.params ? route.params.threadId : undefined)
   const selectedId = computed(() => {
@@ -52,7 +39,7 @@
   const joining = ref(false)
   const creating = ref(false)
   const showCreate = computed(() => threadParam.value === 'new' && isAdmin.value)
-  const { data: options, error: optionsError, refresh: refreshOptions } = await useFetch<{ projects: Project[], people: Person[] }>('/api/chat/conversations/options', { immediate: isAdmin.value, watch: false })
+  const { data: options, error: optionsError, refresh: refreshOptions } = await useFetch<{ projects: ProjectView[], people: PersonView[] }>('/api/chat/conversations/options', { immediate: isAdmin.value, watch: false })
   async function retryContext() {
     await refreshContext()
     if (!contextError.value && isAdmin.value) await refreshOptions()
@@ -84,7 +71,7 @@
     return people.value.filter(person => person.orgId === null || (orgId && person.orgId === orgId))
   })
   const memberGroups = computed(() => {
-    const groups = new Map<string, { label: string, people: Person[] }>()
+    const groups = new Map<string, { label: string, people: PersonView[] }>()
     for (const person of eligiblePeople.value) {
       const key = person.orgId ?? ''
       if (!groups.has(key)) groups.set(key, { label: person.organizationName ?? 'NPTS', people: [] })
@@ -96,7 +83,7 @@
     { label: group.label, value: '', description: '', type: 'label' as const },
     ...group.people.map(person => ({ label: person.name || person.email, value: person.id, description: person.email })),
   ]))
-  function toggleMemberGroup(group: { people: Person[] }) {
+  function toggleMemberGroup(group: { people: PersonView[] }) {
     const ids = group.people.map(person => person.id)
     const selected = new Set(memberIds.value)
     if (ids.every(id => selected.has(id))) ids.forEach(id => selected.delete(id))
@@ -107,8 +94,12 @@
     memberIds.value = selectProjectMembers(memberIds.value, people.value, projects.value.find(project => project.id === id)?.orgId)
   })
 
-  function conversationTitle(thread: Conversation) {
+  function conversationTitle(thread: ConversationView) {
     return thread.name ?? (thread.members.filter(member => member.id !== currentUser.value?.id).map(member => member.name).join(', ') || 'Group conversation')
+  }
+
+  function firstName(fullName: string) {
+    return fullName.split(' ')[0] ?? fullName
   }
 
   async function createConversation() {
@@ -193,7 +184,7 @@
           >
           <span class="block truncate text-sm font-semibold">{{ conversationTitle(thread) }}</span>
           <span class="text-muted mt-1 block truncate text-xs">{{ thread.projectName }} · {{ thread.organizationName }}</span>
-          <span v-if="thread.latestMessage" class="text-muted mt-2 block truncate text-xs">{{ thread.latestMessage.plainTextBody }}</span>
+          <span v-if="thread.latestMessage" class="text-muted mt-2 block truncate text-xs">{{ firstName(thread.latestMessage.senderName) }}: {{ thread.latestMessage.plainTextBody }}</span>
           <span v-if="!thread.isMember" class="text-muted mt-2 block text-xs">Preview · not joined</span>
         </NuxtLink>
       </section>

@@ -19,6 +19,7 @@ import {
   type selectChatThreadMessagesSchema,
   type selectChatThreadsSchema,
 } from '../../db/schema'
+import type { ConversationView } from '../../../shared/types/chat'
 import { db } from '../db'
 import { emitChatMemberJoined, emitChatMessage, emitChatThreadCreated } from './events'
 import { getUserOrgId } from '../authorization'
@@ -232,20 +233,7 @@ type ListConversationsInput = {
   userId: string,
 }
 
-type ConversationSummary = {
-  id: number,
-  name: string | null,
-  projectId: number,
-  projectName: string,
-  organizationName: string,
-  createdAt: Date,
-  closedAt: Date | null,
-  members: { id: string, name: string, organizationName: string | null }[],
-  isMember: boolean,
-  latestMessage: { id: number, plainTextBody: string, createdAt: Date } | null,
-}
-
-export const listConversations = async (data: ListConversationsInput): Promise<ConversationSummary[]> => {
+export const listConversations = async (data: ListConversationsInput): Promise<ConversationView[]> => {
   const orgId = await getUserOrgId(data.userId)
 
   const membershipRows = db.select({ threadId: chatThreadMembers.threadId }).from(chatThreadMembers)
@@ -270,12 +258,16 @@ export const listConversations = async (data: ListConversationsInput): Promise<C
     .leftJoin(organization, eq(user.orgId, organization.id))
     .where(inArray(chatThreadMembers.threadId, ids)).all()
 
-  const messages = db.select(getTableColumns(chatThreadMessages)).from(chatThreads)
+  const messages = db.select({
+    ...getTableColumns(chatThreadMessages),
+    senderName: user.name,
+  }).from(chatThreads)
     .innerJoin(chatThreadMessages, sql`${chatThreadMessages.id} = (
       SELECT m.id FROM chat_thread_messages m
       WHERE m.thread_id = ${chatThreads.id}
       ORDER BY m.created_at DESC, m.id DESC LIMIT 1
     )`)
+    .innerJoin(user, eq(chatThreadMessages.userId, user.id))
     .where(inArray(chatThreads.id, ids)).all()
 
   const latest = new Map<number, typeof messages[number]>()
@@ -283,14 +275,26 @@ export const listConversations = async (data: ListConversationsInput): Promise<C
 
   return threads.map(({ thread, projectName, organizationName }) => {
     const participants = members.filter(member => member.threadId === thread.id)
+    const latestMsg = latest.get(thread.id)
     return {
-      ...thread, projectName, organizationName,
+      id: thread.id,
+      name: thread.name,
+      projectId: thread.projectId,
+      projectName,
+      organizationName,
+      createdAt: thread.createdAt.toISOString(),
+      closedAt: thread.closedAt ? new Date(thread.closedAt).toISOString() : null,
       members: participants.map(({ id, name, organizationName }) => ({ id, name, organizationName })),
       isMember: participants.some(member => member.id === data.userId),
-      latestMessage: latest.get(thread.id) ?? null,
+      latestMessage: latestMsg ? {
+        id: latestMsg.id,
+        plainTextBody: latestMsg.plainTextBody,
+        senderName: latestMsg.senderName ?? '',
+        createdAt: latestMsg.createdAt.toISOString(),
+      } : null,
     }
   }).sort((a, b) =>
-    (b.latestMessage?.createdAt ?? b.createdAt).getTime() - (a.latestMessage?.createdAt ?? a.createdAt).getTime()
+    (new Date(b.latestMessage?.createdAt ?? b.createdAt ?? '').getTime() - new Date(a.latestMessage?.createdAt ?? a.createdAt ?? '').getTime())
     || b.id - a.id,
   )
 }
