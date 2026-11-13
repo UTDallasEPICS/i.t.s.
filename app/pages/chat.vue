@@ -41,12 +41,6 @@ const tabs = [
   { label: 'Discover', value: 'discover' },
 ]
 
-const visibleConversations = computed(() =>
-  conversations.value?.filter((thread) =>
-    activeTab.value === 'mine' ? thread.isMember : !thread.isMember
-  ) ?? []
-)
-
 const selected = computed(() => conversations.value?.find((thread) => thread.id === selectedId.value))
 
 watch(selectedId, () => {
@@ -63,6 +57,7 @@ onMounted(() => {
   })
 })
 onScopeDispose(() => {
+  unmounted = true
   unsubscribeEvents?.()
 })
 
@@ -133,9 +128,10 @@ const canCreate = computed(() =>
   !!projectId.value &&
   memberIds.value.length > 0 &&
   !!message.value.trim() &&
-  message.value.length <= CHAT_MESSAGE_MAX_LENGTH &&
-  !creating.value
+  message.value.length <= CHAT_MESSAGE_MAX_LENGTH
 )
+
+let unmounted = false
 
 watch(() => projectId.value, (id) => {
   memberIds.value = selectProjectMembers(
@@ -159,6 +155,7 @@ function toggleMemberGroup(group: { people: PersonView[] }) {
 async function createConversation() {
   if (!canCreate.value) return
   const generation = ++createGeneration
+  const submitPath = route.fullPath
   const submitted = {
     projectId: projectId.value!,
     name: name.value,
@@ -177,7 +174,7 @@ async function createConversation() {
         message: submitted.message.trim(),
       },
     })
-    if (generation !== createGeneration) return
+    if (unmounted || generation !== createGeneration || route.fullPath !== submitPath) return
     if (
       projectId.value === submitted.projectId &&
       name.value === submitted.name &&
@@ -190,23 +187,17 @@ async function createConversation() {
       memberIds.value = []
     }
     await refresh()
-    if (generation !== createGeneration) return
+    if (unmounted || generation !== createGeneration || route.fullPath !== submitPath) return
     activeTab.value = 'mine'
     await navigateTo(`/chat/${result.thread.id}`)
   } catch {
-    if (generation === createGeneration) {
+    if (!unmounted && generation === createGeneration) {
       actionError.value =
         'Could not start the conversation. Check the project and selected members, then try again.'
     }
   } finally {
-    if (generation === createGeneration) creating.value = false
+    if (!unmounted && generation === createGeneration) creating.value = false
   }
-}
-
-function onCreateKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return
-  event.preventDefault()
-  void createConversation()
 }
 
 const adapter = computed<ChatAdapter | undefined>(() => {
@@ -347,7 +338,7 @@ const conversationTitle = (thread: ConversationView) => {
                   type="submit"
                   icon="i-lucide-arrow-up"
                   :loading="creating"
-                  :disabled="!canCreate"
+                  :disabled="!canCreate || creating"
                   :aria-label="creating ? 'Sending message' : 'Send message'"
                   class="absolute right-2 bottom-2"
                 />
