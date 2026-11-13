@@ -85,6 +85,13 @@
       "when": 1792701382478,
       "tag": "0011_icy_nebula",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794442661123,
+      "tag": "0012_brave_starfox",
+      "breakpoints": true
     }
   ]
 }

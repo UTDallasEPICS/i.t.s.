@@ -1,5 +1,7 @@
 <script setup lang="ts">
-  import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
+  import { computed, nextTick, onMounted, ref, watch } from 'vue'
+  import MessageInput from './MessageInput.vue'
+  import { CHAT_MESSAGE_MAX_LENGTH } from '#shared/chat-limits'
   import { useChatThread } from '../../composables/useChatThread'
   import { useChatDraft } from '../../composables/useChatDraft'
   import type { ChatAdapter } from '../../types/chat'
@@ -21,6 +23,7 @@
     /** Optional userId -> display name map; ids are shown when a name is missing. */
     authorNames?: Record<string, string>
     title?: string
+    readOnly?: boolean
   }>()
 
   const {
@@ -40,7 +43,6 @@
 
   const draft = useChatDraft(() => props.currentUserId, () => props.threadId)
   const list = ref<HTMLElement | null>(null)
-  const composerId = useId()
   const following = ref(true)
   const unseenMessages = ref(false)
 
@@ -71,7 +73,7 @@
   }
 
   const canSend = computed(
-    () => draft.value.trim().length > 0 && !sending.value && loadState.value === 'ready'
+    () => draft.value.trim().length > 0 && draft.value.length <= CHAT_MESSAGE_MAX_LENGTH && !sending.value && loadState.value === 'ready'
   )
 
   const connectionLabel = computed(() => {
@@ -208,7 +210,7 @@
     </div>
 
     <form
-      class="space-y-2 border-t border-gray-200 px-4 py-3 dark:border-gray-800"
+      class="space-y-2 border-t border-gray-200 dark:border-gray-800"
       @submit.prevent="submit"
     >
       <UAlert
@@ -220,23 +222,19 @@
         title="Unable to send message"
         :description="sendError"
       />
-      <label :for="composerId" class="sr-only">Message</label>
-      <UTextarea
-        :id="composerId"
-        v-model="draft"
-        :rows="3"
-        :disabled="loadState !== 'ready'"
-        placeholder="Write a message…"
-        :aria-describedby="`${composerId}-hint`"
-        class="w-full"
-        @keydown="onComposerKeydown"
-      />
-      <div class="flex items-center justify-between gap-3">
-        <p :id="`${composerId}-hint`" class="text-muted text-xs">Enter to send · Shift+Enter for a new line</p>
-        <UButton type="submit" :disabled="!canSend">
-          {{ sending ? 'Sending…' : 'Send' }}
-        </UButton>
+      <div v-if="readOnly" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <p class="text-muted text-sm">Join this conversation to send and receive messages.</p>
+        <slot name="read-only-action" />
       </div>
+      <template v-else>
+      <MessageInput v-model="draft" :disabled="loadState !== 'ready'" @keydown="onComposerKeydown">
+        <UButton
+          type="submit" icon="i-lucide-arrow-up" :loading="sending" :disabled="!canSend"
+          :aria-label="sending ? 'Sending message' : 'Send message'"
+          class="absolute right-2 bottom-2"
+        />
+      </MessageInput>
+      </template>
     </form>
   </section>
 </template>

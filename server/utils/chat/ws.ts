@@ -85,6 +85,7 @@ export function toWireMessage(message: selectChatThreadMessagesSchema): ChatWire
 export function toWireThread(thread: selectChatThreadsSchema): ChatWireThread {
   return {
     id: thread.id,
+    name: thread.name,
     projectId: thread.projectId,
     createdAt: thread.createdAt.toISOString(),
     closedAt: thread.closedAt?.toISOString() ?? null,
@@ -123,6 +124,13 @@ export function publishThreadCreated(thread: selectChatThreadsSchema, memberIds:
       indexThread(peer, thread.id)
       sendFrame(peer, { type: 'thread.created', thread: wire })
     }
+  }
+}
+
+export function subscribeUserToThread(userId: string, threadId: number) {
+  for (const peer of peersByUser.get(userId) ?? []) {
+    subscriptions.get(peer)?.threadIds.add(threadId)
+    indexThread(peer, threadId)
   }
 }
 

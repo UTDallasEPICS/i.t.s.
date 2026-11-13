@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid pagination parameters' })
   }
 
-  await requireThreadAccess(requireUser(event).id, threadId)
+  await requireThreadAccess(requireUser(event).id, threadId, true)
 
   const result = await paginateThreadMessages({
     threadId,

@@ -49,6 +49,7 @@ const message = {
 }
 
 const thread = {
+  name: null,
   id: 3,
   projectId: 1,
   createdAt: new Date('2026-10-23T00:00:00Z'),

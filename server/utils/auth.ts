@@ -47,6 +47,8 @@ export const auth = betterAuth({
       // Only provisioned users may sign in: a new user without an org would be NPTS.
       disableSignUp: true,
       async sendVerificationOTP({ email, otp }) {
+        if (process.env.NODE_ENV === 'development' && process.env.DEV_OTP_SKIP_EMAIL === '1'
+          && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(env.BETTER_AUTH_URL).hostname)) return
         await transporter.sendMail({
           from: env.EMAIL_FROM,
           to: email,
