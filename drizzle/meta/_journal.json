@@ -92,6 +92,20 @@
       "when": 1794406087612,
       "tag": "0012_eager_madame_web",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1794842733175,
+      "tag": "0013_sparkling_scream",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1794842855161,
+      "tag": "0014_wandering_christian_walker",
+      "breakpoints": true
     }
   ]
 }

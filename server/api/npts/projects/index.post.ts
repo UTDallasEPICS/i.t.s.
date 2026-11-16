@@ -2,22 +2,25 @@ import { z } from 'zod'
 import { defineEventHandler, readValidatedBody } from 'h3'
 import { requireUser } from '../../../utils/session'
 import { requireAdmin } from '../../../utils/authorization'
-import { eq } from 'drizzle-orm'
+import { eq, or } from 'drizzle-orm'
 import { db } from '../../../utils/db'
 import { organization, project } from '../../../db/schema'
+import { githubRepoSchema } from '../../../utils/github-repo-schema'
 
 // Validate project creation input.
-const createProjectSchema = z.object({
-  name: z.string().trim().min(1, 'Project name is required'),
+const createProjectSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Project name is required'),
 
-  organizationId: z.string().uuid(),
+    organizationId: z.string().uuid(),
+    stageUrl: z.url().optional(),
+    prodUrl: z.url().optional(),
 
-  siteTag: z.string().trim().min(1, 'Site tag is required'),
-
-  githubRepo: z
-    .string()
-    .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, 'GitHub repository must use owner/name format'),
-})
+    githubRepo: githubRepoSchema,
+  })
+  .refine((data) => data.stageUrl !== undefined || data.prodUrl !== undefined, {
+    message: 'At least one of stageUrl or prodUrl is required',
+  })
 
 export default defineEventHandler(async (event) => {
   const currentUser = requireUser(event)
@@ -50,48 +53,32 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Check whether the site tag is already in use.
+  // Check whether either URL is already used by another project.
+  const urls = [body.stageUrl, body.prodUrl].filter((url): url is string => url !== undefined)
+
   const [existingProject] = await db
     .select({ id: project.id })
     .from(project)
-    .where(eq(project.siteTag, body.siteTag))
+    .where(or(...urls.flatMap((url) => [eq(project.stageUrl, url), eq(project.prodUrl, url)])))
 
   if (existingProject) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'Site tag already exists',
+      statusMessage: 'Site URL already exists in another project',
     })
   }
-
   // Create the project.
-  try {
-    const [createdProject] = await db
-      .insert(project)
-      .values({
-        name: body.name,
-        projectPartnerId: body.organizationId,
-        siteTag: body.siteTag,
-        githubRepo: body.githubRepo,
-      })
-      .returning()
 
-    return createdProject
-  } catch (error) {
-    // Handle a database UNIQUE constraint violation.
-    const cause = error instanceof Error && 'cause' in error ? error.cause : error
+  const [createdProject] = await db
+    .insert(project)
+    .values({
+      name: body.name,
+      projectPartnerId: body.organizationId,
+      stageUrl: body.stageUrl,
+      prodUrl: body.prodUrl,
+      githubRepo: body.githubRepo,
+    })
+    .returning()
 
-    const errorCode = cause && typeof cause === 'object' && 'code' in cause ? cause.code : undefined
-
-    const errorMessage = cause instanceof Error ? cause.message : ''
-
-    if (errorCode === 'SQLITE_CONSTRAINT_UNIQUE' && errorMessage.includes('project.siteTag')) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: 'Site tag already exists',
-      })
-    }
-
-    // Preserve unexpected database errors.
-    throw error
-  }
+  return createdProject
 })

@@ -2,20 +2,19 @@ import { z } from 'zod'
 import { defineEventHandler, readValidatedBody, getRouterParam, createError } from 'h3'
 import { requireUser } from '../../../utils/session'
 import { requireAdmin } from '../../../utils/authorization'
-import { eq } from 'drizzle-orm'
+import { eq, or, ne, and } from 'drizzle-orm'
 import { db } from '../../../utils/db'
 import { project, organization } from '../../../db/schema'
+import { githubRepoSchema } from '../../../utils/github-repo-schema'
 
 // Validate fields that can be updated.
 const updateProjectSchema = z
   .object({
     name: z.string().trim().min(1).optional(),
     organizationId: z.string().trim().min(1).optional(),
-    siteTag: z.string().trim().min(1).optional(),
-    githubRepo: z
-      .string()
-      .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, 'GitHub repository must use owner/name format')
-      .optional(),
+    stageUrl: z.url().nullable().optional(),
+    prodUrl: z.url().nullable().optional(),
+    githubRepo: githubRepoSchema.optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, 'At least one field is required')
@@ -57,6 +56,18 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Project not found',
     })
   }
+  // Determine the URLs after applying the requested changes.
+  const newStageUrl = body.stageUrl !== undefined ? body.stageUrl : existingProject.stageUrl
+
+  const newProdUrl = body.prodUrl !== undefined ? body.prodUrl : existingProject.prodUrl
+
+  // At least one URL must remain configured.
+  if (newStageUrl === null && newProdUrl === null) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'At least one of stageUrl or prodUrl is required',
+    })
+  }
 
   // Check whether the new organization exists.
   if (body.organizationId !== undefined) {
@@ -73,19 +84,26 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Check site tag uniqueness, excluding the current project.
-  if (body.siteTag !== undefined) {
-    const [duplicateProject] = await db
-      .select({ id: project.id })
-      .from(project)
-      .where(eq(project.siteTag, body.siteTag))
+  // Check URL uniqueness across other projects.
+  const urls = [newStageUrl, newProdUrl].filter(
+    (url): url is string => url !== null && url !== undefined
+  )
 
-    if (duplicateProject && duplicateProject.id !== projectId) {
-      throw createError({
-        statusCode: 409,
-        statusMessage: 'Site tag already exists',
-      })
-    }
+  const [duplicateProject] = await db
+    .select({ id: project.id })
+    .from(project)
+    .where(
+      and(
+        ne(project.id, projectId),
+        or(...urls.flatMap((url) => [eq(project.stageUrl, url), eq(project.prodUrl, url)]))
+      )
+    )
+
+  if (duplicateProject) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Site URL already exists in another project',
+    })
   }
   // Update only the fields provided in the request.
   const [updatedProject] = await db
@@ -95,7 +113,8 @@ export default defineEventHandler(async (event) => {
       ...(body.organizationId !== undefined && {
         projectPartnerId: body.organizationId,
       }),
-      ...(body.siteTag !== undefined && { siteTag: body.siteTag }),
+      ...(body.stageUrl !== undefined && { stageUrl: body.stageUrl }),
+      ...(body.prodUrl !== undefined && { prodUrl: body.prodUrl }),
       ...(body.githubRepo !== undefined && { githubRepo: body.githubRepo }),
     })
     .where(eq(project.id, projectId))

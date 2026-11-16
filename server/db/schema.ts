@@ -120,7 +120,8 @@ export const project = sqliteTable(
   {
     id: integer('id').primaryKey(),
     name: text('name').notNull(),
-    siteTag: text('siteTag').unique(),
+    stageUrl: text('stageUrl'),
+    prodUrl: text('prodUrl'),
     // repo `full_name`. ex: `UTDallasEPICS/ITS`
     githubRepo: text('githubRepo').notNull(),
     projectPartnerId: text('projectPartnerId')

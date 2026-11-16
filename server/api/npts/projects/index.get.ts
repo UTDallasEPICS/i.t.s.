@@ -15,7 +15,8 @@ export default defineEventHandler(async (event) => {
     .select({
       id: project.id,
       name: project.name,
-      siteTag: project.siteTag,
+      stageUrl: project.stageUrl,
+      prodUrl: project.prodUrl,
       githubRepo: project.githubRepo,
       projectPartnerId: project.projectPartnerId,
     })
