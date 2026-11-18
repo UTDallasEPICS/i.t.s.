@@ -13,18 +13,18 @@ The widget submission endpoint (`POST /api/widget/tickets`, #32) is public. Anyo
 - **Stop floods:** Many submissions in a short time should be blocked before a ticket is created.
 - **Don't block real users:** Several people may share one IP (for example, a school or an office). Real users rarely send more than one or two tickets.
 - **Easy to maintain:** EPICS team members change every semester, so the solution should be simple and should not need new infrastructure or paid services.
-- **Anonymous users:** We can't limit per account, so we have to use the site tag and the client IP.
+- **Anonymous users:** We can't limit per account, so we have to use the client IP and the project (found from the page origin).
 
 ## 3. Options Considered
 
 ### Option 1: Rate limiter in the ITS API (in-memory)
 
-We write a small helper (`server/utils/rateLimit.ts`) and call it in the submission handler. It keeps recent request times in server memory, keyed by site tag + IP.
+We write a small helper (`server/utils/rateLimit.ts`) and call it in the submission handler. It keeps recent request times in server memory, keyed by client IP (and by project for the per-project limit).
 
 **Pros:**
 
 - No new dependency or infrastructure, and it is free.
-- We control the rules (limits, cooldown, keys) and can use the site tag.
+- We control the rules (limits, cooldown, keys) and can use the project.
 - Easy to test with Vitest without a database or network.
 - Works the same on dev, stage, and prod.
 
@@ -44,7 +44,7 @@ A community Nuxt module that includes a rate limiter, configured in `nuxt.config
 **Cons:**
 
 - It adds a dependency to the whole app, and its other default settings (security headers) could affect other workstreams.
-- Less control over the cooldown and over using the site tag as a key.
+- Less control over the cooldown and over using the project as a key.
 - It still needs shared storage to work across multiple instances.
 
 ### Option 3: AWS WAF rate-based rules
@@ -58,23 +58,23 @@ A rule in front of ITS that blocks an IP after too many requests.
 **Cons:**
 
 - It is infrastructure work outside this workstream.
-- It only counts by IP, so it can't use the site tag. It also can't send a friendly message to the widget.
+- It only counts by IP, so it can't use the project. It also can't send a friendly message to the widget.
 - It may add AWS cost.
 
 ## 4. Decision & Justification
 
 **Chosen Option:** Option 1 — Rate limiter in the ITS API (in-memory)
 
-Our traffic is expected to be low (a few tickets per project), so a simple limiter in server memory is enough for now. It needs no new infrastructure, costs nothing, and is easy for the next team to read and test. Option 2 adds an app-wide dependency for one route, and Option 3 depends on AWS access and can't use site tags.
+Our traffic is expected to be low (a few tickets per project), so a simple limiter in server memory is enough for now. It needs no new infrastructure, costs nothing, and is easy for the next team to read and test. Option 2 adds an app-wide dependency for one route, and Option 3 depends on AWS access and can't use the project.
 
 The limiter works like this:
 
-- **Sliding window:** For each site tag + IP, count requests in the last 10 seconds. More than 3 is blocked. A sliding window avoids the gap of a fixed window, where 3 requests at 9 s and 3 at 11 s would all pass.
-- **Cooldown:** Once blocked, the same site tag + IP is blocked for 5 minutes. Without a cooldown, a bot could keep sending 3 tickets every 10 seconds.
-- **Site tag limit:** Each site tag allows at most 50 tickets per hour, so a bot using many IPs still can't flood one project.
+- **Sliding window:** For each client IP, count requests in the last 10 seconds. More than 3 is blocked. A sliding window avoids the gap of a fixed window, where 3 requests at 9 s and 3 at 11 s would all pass.
+- **Cooldown:** Once blocked, the same IP is blocked for 5 minutes. Without a cooldown, a bot could keep sending 3 tickets every 10 seconds.
+- **Project limit:** Each project (found from the request's `Origin` header) allows at most 50 tickets per hour, so a bot using many IPs still can't flood one project.
 - **Response:** A blocked request gets `429 Too Many Requests` with a `Retry-After` header, and the widget shows "Please try again in N minutes."
 
-Using site tag + IP instead of only IP means people who share an IP on different partner sites don't block each other.
+The per-client key is the IP alone, not origin + IP: the `Origin` header is chosen by the caller, so using it in a key would let anyone create unlimited keys. The cost is that people who share an IP across different partner sites share one limit.
 
 ## 5. Consequences & Next Steps
 
@@ -89,7 +89,7 @@ Using site tag + IP instead of only IP means people who share an IP on different
 - The rate limit is not exact. Counts are kept separately on each server and are lost when a server restarts, so a bot may get a few more requests than the limit allows.
   - To fix this later, all rate limit code is in one helper (`server/utils/rateLimit.ts`), so we can move the counts to shared storage like Redis by changing only that file.
 - Behind the AWS load balancer, the client IP must be read from the `X-Forwarded-For` header (`getRequestIP(event, { xForwardedFor: true })`), or every request would look like it came from the load balancer.
-- The limits (3 per 10 s, 5-minute cooldown, 50 per site tag per hour) are starting values and will need tuning with real traffic.
+- The limits (3 per 10 s, 5-minute cooldown, 50 per project per hour) are starting values and will need tuning with real traffic.
 
 ### Action Items
 

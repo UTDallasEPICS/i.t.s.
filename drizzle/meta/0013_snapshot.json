@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ec6698ef-9ec1-471f-ae84-31dd339cdd47",
+  "id": "9592d93d-e803-4d9a-a928-53da252ca4ad",
   "prevId": "0f629ba6-b2d2-4939-997a-820801d2d85a",
   "tables": {
     "account": {
@@ -404,6 +404,20 @@
           "notNull": true,
           "autoincrement": false
         },
+        "stageUrl": {
+          "name": "stageUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prodUrl": {
+          "name": "prodUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "githubRepo": {
           "name": "githubRepo",
           "type": "text",
@@ -417,13 +431,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "siteTag": {
-          "name": "siteTag",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -433,13 +440,6 @@
             "projectPartnerId"
           ],
           "isUnique": false
-        },
-        "project_siteTag_unique": {
-          "name": "project_siteTag_unique",
-          "columns": [
-            "siteTag"
-          ],
-          "isUnique": true
         }
       },
       "foreignKeys": {

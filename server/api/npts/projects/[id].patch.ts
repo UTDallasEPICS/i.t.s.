@@ -6,14 +6,15 @@ import { eq, or, ne, and } from 'drizzle-orm'
 import { db } from '../../../utils/db'
 import { project, organization } from '../../../db/schema'
 import { githubRepoSchema } from '../../../utils/github-repo-schema'
+import { projectUrlSchema } from '../../../utils/project-url-schema'
 
 // Validate fields that can be updated.
 const updateProjectSchema = z
   .object({
     name: z.string().trim().min(1).optional(),
     organizationId: z.string().trim().min(1).optional(),
-    stageUrl: z.url().nullable().optional(),
-    prodUrl: z.url().nullable().optional(),
+    stageUrl: projectUrlSchema.nullable().optional(),
+    prodUrl: projectUrlSchema.nullable().optional(),
     githubRepo: githubRepoSchema.optional(),
   })
   .strict()

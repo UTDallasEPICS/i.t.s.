@@ -8,7 +8,7 @@ export default defineEventHandler((event) => {
   if (!isWidgetPath) return
 
   handleCors(event, {
-    origin: '*', // widget requests are credential-less; narrow per site tag later
+    origin: '*', // widget requests are credential-less; narrow to each project's URLs later
     methods: ['GET', 'POST', 'OPTIONS'],
     allowHeaders: ['Content-Type'],
     // Let the widget read Retry-After on 429, so it can show the real wait time.

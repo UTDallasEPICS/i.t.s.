@@ -6,8 +6,9 @@
   import TicketForm from '../../app/components/shared/TicketForm.vue'
   import type { TicketSubmission } from '#shared/tickets'
 
-  // Values passed in from main.ts (site-tag="..." becomes siteTag)
-  const props = defineProps<{ siteTag: string; apiBase: string }>()
+  // Value passed in from main.ts. ITS picks the project from the page's origin (the
+  // Origin header the browser sends), so the embed needs no project id or tag.
+  const props = defineProps<{ apiBase: string }>()
 
   const open = ref(false)
   const state = ref<'idle' | 'loading' | 'ok' | 'error'>('idle')
@@ -17,15 +18,12 @@
   const result = ref<'idle' | 'sent' | 'error'>('idle')
   const message = ref('')
 
-  // Reachability check only: /api/health does not validate the site tag yet.
-  // Site-tag validation lands with the widget submission endpoint in #32.
+  // Reachability check only: /api/health does not validate the embedding site.
 
   async function checkConnection() {
     state.value = 'loading'
     try {
-      const res = await fetch(
-        `${props.apiBase}/api/health?siteTag=${encodeURIComponent(props.siteTag)}`
-      )
+      const res = await fetch(`${props.apiBase}/api/health`)
       state.value = res.ok ? 'ok' : 'error'
     } catch {
       state.value = 'error'
@@ -38,7 +36,7 @@
   }
 
   // The form only reports what the user typed; the widget sends it to ITS.
-  // With omit-project the payload is { title, description }: the site tag picks the project.
+  // With omit-project the payload is { title, description }: the page origin picks the project.
   async function submitTicket(ticket: TicketSubmission) {
     submitting.value = true
     message.value = ''
@@ -46,7 +44,7 @@
       const res = await fetch(`${props.apiBase}/api/widget/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteTag: props.siteTag, ...ticket }),
+        body: JSON.stringify(ticket),
       })
 
       if (res.status === 201) {

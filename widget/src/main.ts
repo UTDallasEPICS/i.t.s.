@@ -4,8 +4,7 @@ import WidgetRoot from './WidgetRoot.ce.vue'
 // Must be read right away; it becomes null once this script finishes
 const script = document.currentScript as HTMLScriptElement | null
 
-// Same as widget-test.js: read the site tag and the ITS origin from our own <script> tag
-const siteTag = script?.dataset.siteTag ?? ''
+// Read the ITS origin from our own <script> tag
 const apiBase = script?.src ? new URL(script.src).origin : ''
 
 // Register <its-widget> once. Re-including this script must not throw.
@@ -20,7 +19,6 @@ if (!document.querySelector('its-widget[data-its-widget]')) {
   } else {
     const el = document.createElement('its-widget')
     el.setAttribute('data-its-widget', '')
-    el.setAttribute('site-tag', siteTag)
     el.setAttribute('api-base', apiBase)
 
     if (document.body) {

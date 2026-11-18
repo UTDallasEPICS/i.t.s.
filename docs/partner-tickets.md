@@ -49,7 +49,7 @@ limits match on both sides. A build outside Nuxt needs the `#shared` alias
 | ------------------------------------------- | --------------------------------------------------------------------------------------- |
 | `projects?: { id: number; name: string }[]` | Selectable partner projects (defaults to `[]`)                                          |
 | `projectId?: number`                        | Fixed project; hides the project selector and takes precedence over `projects`          |
-| `omitProject?: boolean`                     | The parent resolves the project itself (widget site tag); the payload has no project    |
+| `omitProject?: boolean`                     | The parent resolves the project itself (widget page origin); the payload has no project    |
 | `submitting?: boolean`                      | Disables fields/submission and shows progress                                           |
 | `disabled?: boolean`                        | Disables the form without showing progress                                              |
 | `error` (optional string or null)           | Parent-provided error displayed as an alert                                             |
@@ -63,7 +63,7 @@ limits match on both sides. A build outside Nuxt needs the `#shared` alias
   :error="error"
   @submit="submitTicket"
 />
-<!-- Widget: the site tag decides the project -->
+<!-- Widget: the page origin decides the project -->
 <TicketForm omit-project :submitting="pending" :error="error" @submit="submitTicket" />
 ```
 
@@ -74,7 +74,7 @@ tokens in `app/assets/css/main.css`; a partner site can set them on `its-widget`
 The form retains input after an error. The parent unmounts/resets it after a successful save.
 The API independently validates access; a fixed project prop is not authorization.
 Authenticated creation goes through `server/utils/create-ticket.ts`. The public widget
-endpoint (#32) must resolve site-tag access and integrate with the shared persistence contract.
+endpoint (#32) resolves the project from the embedding page's origin (a project's stage or prod URL) and integrates with the shared persistence contract.
 Do not expose this authenticated helper as a public route or forge a session for widget users.
 
 ## October 18 milestone (#16): demonstration

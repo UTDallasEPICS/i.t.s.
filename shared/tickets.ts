@@ -25,7 +25,7 @@ export const updateTicketSchema = createTicketSchema.pick({ title: true, descrip
 export type TicketFormValues = z.infer<typeof createTicketSchema>
 export type TicketContentValues = z.infer<typeof updateTicketSchema>
 // What the shared form emits. `projectId` is absent only when the parent resolves
-// the project itself (the widget's site tag).
+// the project itself (the widget's page origin).
 export type TicketSubmission = TicketContentValues & Partial<Pick<TicketFormValues, 'projectId'>>
 export interface TicketProjectOption {
   id: number

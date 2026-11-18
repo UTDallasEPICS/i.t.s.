@@ -6,6 +6,7 @@ import { eq, or } from 'drizzle-orm'
 import { db } from '../../../utils/db'
 import { organization, project } from '../../../db/schema'
 import { githubRepoSchema } from '../../../utils/github-repo-schema'
+import { projectUrlSchema } from '../../../utils/project-url-schema'
 
 // Validate project creation input.
 const createProjectSchema = z
@@ -13,8 +14,8 @@ const createProjectSchema = z
     name: z.string().trim().min(1, 'Project name is required'),
 
     organizationId: z.string().uuid(),
-    stageUrl: z.url().optional(),
-    prodUrl: z.url().optional(),
+    stageUrl: projectUrlSchema.optional(),
+    prodUrl: projectUrlSchema.optional(),
 
     githubRepo: githubRepoSchema,
   })

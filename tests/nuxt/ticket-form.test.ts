@@ -124,7 +124,7 @@ describe('TicketForm', () => {
     ])
   })
 
-  it('emits only the ticket text when the parent resolves the project (widget site tag)', async () => {
+  it('emits only the ticket text when the parent resolves the project (widget page origin)', async () => {
     await wrapper.setProps({ projects: [], omitProject: true })
     expect(wrapper.find('select').exists()).toBe(false)
     expect(wrapper.find('[role="status"]').exists()).toBe(false)

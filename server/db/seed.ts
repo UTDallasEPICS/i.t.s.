@@ -110,7 +110,8 @@ async function seedProject(partnerId: string) {
       name: 'My Test Project',
       githubRepo: GITHUB_REPO_ITS,
       projectPartnerId: partnerId,
-      siteTag: 'sample-site-tag',
+      // The sample site (`pnpm sample-site`) is served from here; the widget finds the project by origin.
+      stageUrl: 'http://localhost:4000',
     })
     .returning()
 

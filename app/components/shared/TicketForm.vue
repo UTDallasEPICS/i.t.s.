@@ -6,7 +6,7 @@
   // Props
   //   projects     selectable projects (partner flow)
   //   projectId    fixed project; hides the selector and wins over `projects`
-  //   omitProject  the parent resolves the project itself (widget site tag);
+  //   omitProject  the parent resolves the project itself (widget page origin);
   //                the payload then has no projectId
   //   submitting   parent is saving: disables the form and shows progress
   //   disabled     disables the form without showing progress
