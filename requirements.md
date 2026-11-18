@@ -1,8 +1,7 @@
 # Requirements
 
-These are the baseline requirements satisfied by this template. A team adopting the
-template inherits everything below as **Verified**, then appends their own project
-requirements as new rows.
+These are the baseline requirements satisfied by ITS. The team inherits everything below
+as **Verified**, then appends their own project requirements as new rows.
 
 ## 1. Requirement Matrix
 

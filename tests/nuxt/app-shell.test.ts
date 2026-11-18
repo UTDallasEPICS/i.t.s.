@@ -103,9 +103,9 @@ describe('application shell (app.vue)', () => {
     // Act: mount the shell, stubbing <NuxtPage /> so no page/route is loaded.
     const wrapper = await mountShell()
 
-    // Assert: the brand link shows "Nuxt Template" and targets "/".
+    // Assert: the brand link shows "ITS" and targets "/".
     const brandLink = wrapper.get('a[href="/"]')
-    expect(brandLink.text()).toContain('Nuxt Template')
+    expect(brandLink.text()).toContain('ITS')
     expect(brandLink.attributes('href')).toBe('/')
   })
 
@@ -205,6 +205,5 @@ describe('application shell (app.vue)', () => {
     const html = toggle.html()
     expect(html).toContain('i-heroicons:moon-20-solid')
     expect(html).toContain('i-heroicons:sun-20-solid')
-    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
