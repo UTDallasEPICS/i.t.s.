@@ -124,6 +124,7 @@ describe('application shell (app.vue)', () => {
 
     // Assert: the ticket navigation lives in the top bar, not the dashboard page.
     expect(hrefs(wrapper)).toContain('/tickets')
+    expect(hrefs(wrapper)).toContain('/chat')
     expect(hrefs(wrapper)).toContain('/tickets/new')
   })
 
@@ -142,6 +143,7 @@ describe('application shell (app.vue)', () => {
 
     // Assert: no ticket navigation while unauthenticated.
     expect(wrapper.find('a[href="/tickets"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/chat"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/tickets/new"]').exists()).toBe(false)
   })
 

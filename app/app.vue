@@ -134,8 +134,9 @@
           </NuxtLink>
 
           <div class="flex items-center gap-2">
-            <!-- Ticket navigation only appears once the user is authenticated. Neutral buttons (no color). -->
+            <!-- Navigation only appears once the user is authenticated. Neutral buttons (no color). -->
             <UButton v-if="user" to="/tickets" variant="ghost">View tickets</UButton>
+            <UButton v-if="user" to="/chat" variant="ghost">Chat</UButton>
             <UButton v-if="user" to="/tickets/new" variant="ghost">New ticket</UButton>
             <UButton v-if="isAdmin" to="/admin" variant="ghost">Manage users</UButton>
 

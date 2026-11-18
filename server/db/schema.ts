@@ -100,6 +100,7 @@ export const tickets = sqliteTable('tickets', {
 
 export const chatThreads = sqliteTable('chat_threads', {
   id: integer('id').primaryKey(),
+  name: text('name'),
   projectId: integer('projectId')
     .notNull()
     .references(() => project.id, { onDelete: 'cascade' }),
