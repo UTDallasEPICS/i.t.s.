@@ -77,8 +77,12 @@ export const project = sqliteTable('project', {
   projectPartnerId: text('projectPartnerId')
     .notNull()
     .references(() => organization.id, { onDelete: 'cascade' }),
+  // Public tag the embeddable widget sends to identify this project.
+  // Nullable: only projects that embed the widget need one.
+  siteTag: text('siteTag'),
 }, (table) => [
   index('project_projectPartnerId_idx').on(table.projectPartnerId),
+  uniqueIndex('project_siteTag_unique').on(table.siteTag),
 ])
 
 export const tickets = sqliteTable('tickets', {
