@@ -72,6 +72,8 @@ export const verification = sqliteTable('verification', {
 export const project = sqliteTable('project', {
   id: integer('id').primaryKey(),
   name: text('name').notNull(),
+  stageUrl: text('stageUrl'),
+  prodUrl: text('prodUrl'),
   // repo `full_name`. ex: `UTDallasEPICS/ITS`
   githubRepo: text('githubRepo').notNull(),
   projectPartnerId: text('projectPartnerId')
