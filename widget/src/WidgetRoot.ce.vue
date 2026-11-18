@@ -1,12 +1,14 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  // Shared component that lives in the main ITS app (app/components/shared).
-  // Importing it here proves UI code can be reused in the widget.
+  // Shared components that live in the main ITS app (app/components/shared).
+  // The ticket form is the same one the partner "New ticket" screen renders.
   import StatusPill from '../../app/components/shared/StatusPill.vue'
-  import WidgetTicketForm from './WidgetTicketForm.vue'
+  import TicketForm from '../../app/components/shared/TicketForm.vue'
+  import type { TicketSubmission } from '#shared/tickets'
 
-  // Values passed in from main.ts (site-tag="..." becomes siteTag)
-  const props = defineProps<{ siteTag: string; apiBase: string }>()
+  // Value passed in from main.ts. ITS picks the project from the page's origin (the
+  // Origin header the browser sends), so the embed needs no project id or tag.
+  const props = defineProps<{ apiBase: string }>()
 
   const open = ref(false)
   const state = ref<'idle' | 'loading' | 'ok' | 'error'>('idle')
@@ -16,15 +18,12 @@
   const result = ref<'idle' | 'sent' | 'error'>('idle')
   const message = ref('')
 
-  // Reachability check only: /api/health does not validate the site tag yet.
-  // Site-tag validation lands with the widget submission endpoint in #32.
+  // Reachability check only: /api/health does not validate the embedding site.
 
   async function checkConnection() {
     state.value = 'loading'
     try {
-      const res = await fetch(
-        `${props.apiBase}/api/health?siteTag=${encodeURIComponent(props.siteTag)}`
-      )
+      const res = await fetch(`${props.apiBase}/api/health`)
       state.value = res.ok ? 'ok' : 'error'
     } catch {
       state.value = 'error'
@@ -37,14 +36,15 @@
   }
 
   // The form only reports what the user typed; the widget sends it to ITS.
-  async function submitTicket(ticket: { title: string; description: string }) {
+  // With omit-project the payload is { title, description }: the page origin picks the project.
+  async function submitTicket(ticket: TicketSubmission) {
     submitting.value = true
     message.value = ''
     try {
       const res = await fetch(`${props.apiBase}/api/widget/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteTag: props.siteTag, ...ticket }),
+        body: JSON.stringify(ticket),
       })
 
       if (res.status === 201) {
@@ -92,8 +92,12 @@
       </div>
 
       <template v-else>
-        <WidgetTicketForm :submitting="submitting" @submit="submitTicket" />
-        <p v-if="message" class="message error">{{ message }}</p>
+        <TicketForm
+          omit-project
+          :submitting="submitting"
+          :error="result === 'error' ? message : null"
+          @submit="submitTicket"
+        />
       </template>
     </div>
     <button class="launcher" @click="toggle">?</button>

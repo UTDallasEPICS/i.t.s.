@@ -130,23 +130,36 @@
         <UContainer class="flex h-16 items-center justify-between">
           <NuxtLink to="/" class="flex items-center gap-2 text-xl font-bold">
             <UIcon name="i-heroicons-cube-transparent" class="text-primary-500 h-8 w-8" />
-            <span>Nuxt Template</span>
+            <span>ITS</span>
           </NuxtLink>
 
           <div class="flex items-center gap-2">
-            <!-- Ticket navigation only appears once the user is authenticated. Neutral buttons (no color). -->
+            <!-- Navigation only appears once the user is authenticated. Neutral buttons (no color). -->
             <UButton v-if="user" to="/tickets" variant="ghost">View tickets</UButton>
+            <UButton v-if="user" to="/chat" variant="ghost">Chat</UButton>
             <UButton v-if="user" to="/tickets/new" variant="ghost">New ticket</UButton>
             <UButton v-if="isAdmin" to="/admin" variant="ghost">Manage users</UButton>
 
-            <!-- Theme toggle sits to the left of the profile/account button. -->
+            <!-- Theme toggle sits to the left of the profile/account button. Both icons stay mounted so
+                 the icon reflects the resolved theme (including a "system" preference) instead of being
+                 fixed to the sun. -->
             <UButton
-              :icon="isDark ? 'i-heroicons-moon-20-solid' : 'i-heroicons-sun-20-solid'"
               color="neutral"
               variant="ghost"
-              @click="isDark = !isDark"
               aria-label="Toggle Theme"
-            />
+              @click="isDark = !isDark"
+            >
+              <template #leading="{ ui }">
+                <UIcon
+                  name="i-heroicons-moon-20-solid"
+                  :class="ui.leadingIcon({ class: 'hidden dark:inline-block' })"
+                />
+                <UIcon
+                  name="i-heroicons-sun-20-solid"
+                  :class="ui.leadingIcon({ class: 'dark:hidden' })"
+                />
+              </template>
+            </UButton>
 
             <UDropdownMenu
               v-if="user && !pending"

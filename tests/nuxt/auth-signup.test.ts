@@ -5,6 +5,9 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { eq } from 'drizzle-orm'
 import {
   account,
+  chatThreadMembers,
+  chatThreadMessages,
+  chatThreads,
   organization,
   project,
   session,
@@ -19,6 +22,10 @@ import ticketsHandler from '../../server/api/tickets/index.post'
 import listHandler from '../../server/api/tickets/index.get'
 import detailHandler from '../../server/api/tickets/[id].get'
 import editHandler from '../../server/api/tickets/[id].patch'
+import chatListHandler from '../../server/api/chat/conversations/index.get'
+import chatCreateHandler from '../../server/api/chat/conversations/index.post'
+import chatMessagesHandler from '../../server/api/chat/threads/[threadId]/messages.get'
+import chatSendHandler from '../../server/api/chat/threads/[threadId]/messages.post'
 
 const { sendMail } = vi.hoisted(() => ({ sendMail: vi.fn() }))
 
@@ -75,6 +82,10 @@ beforeAll(async () => {
   router.get('/api/tickets', listHandler)
   router.get('/api/tickets/:id', detailHandler)
   router.patch('/api/tickets/:id', editHandler)
+  router.get('/api/chat/conversations', chatListHandler)
+  router.post('/api/chat/conversations', chatCreateHandler)
+  router.get('/api/chat/threads/:threadId/messages', chatMessagesHandler)
+  router.post('/api/chat/threads/:threadId/messages', chatSendHandler)
   app.use(router)
   protectedRequest = toWebHandler(app)
 })
@@ -121,6 +132,32 @@ function createTicket(projectId: number, cookie = '') {
 }
 
 describe('provisioned-user OTP login', () => {
+  it('lets provisioned NPTS and a partner exchange a persistent conversation via real session cookies', async () => {
+    const npts = await login('npts@example.com')
+    const partner = await login('partner@example.com')
+    const requestChat = (path: string, cookie: string, method = 'GET', body?: unknown) => protectedRequest(
+      new Request(`http://localhost:3000${path}`, {
+        method, headers: { cookie, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+    )
+    try {
+      const created = await requestChat('/api/chat/conversations', npts, 'POST', {
+        projectId: 1, memberIds: ['partner'], name: 'Planning', message: 'Welcome',
+      })
+      expect(created.status).toBe(201)
+      const { thread } = await created.json()
+      expect(await (await requestChat('/api/chat/conversations', partner)).json()).toMatchObject([{ id: thread.id, isMember: true }])
+      expect((await requestChat(`/api/chat/threads/${thread.id}/messages`, partner, 'POST', { plainTextBody: 'Hello' })).status).toBe(201)
+      const history = await (await requestChat(`/api/chat/threads/${thread.id}/messages`, npts)).json()
+      expect(history.messages.map((message: { plainTextBody: string }) => message.plainTextBody)).toEqual(['Welcome', 'Hello'])
+      expect((await requestChat('/api/chat/conversations', '')).status).toBe(401)
+    } finally {
+      db.delete(chatThreadMessages).run()
+      db.delete(chatThreadMembers).run()
+      db.delete(chatThreads).run()
+    }
+  })
   beforeEach(() => {
     sendMail.mockReset().mockResolvedValue({ messageId: 'test-message' })
     let gitHubIssueCounter = 100

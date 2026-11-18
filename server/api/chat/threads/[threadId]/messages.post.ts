@@ -3,9 +3,10 @@ import { z } from 'zod'
 import { requireThreadAccess } from '~~/server/utils/chat/access'
 import { sendMessage } from '~~/server/utils/chat/service'
 import { requireUser } from '~~/server/utils/session'
+import { CHAT_MESSAGE_MAX_LENGTH } from '#shared/chat-limits'
 
 const bodySchema = z.strictObject({
-  plainTextBody: z.string().trim().min(1, 'Enter a message.'),
+  plainTextBody: z.string().max(CHAT_MESSAGE_MAX_LENGTH).trim().min(1, 'Enter a message.'),
 })
 
 export default defineEventHandler(async (event) => {

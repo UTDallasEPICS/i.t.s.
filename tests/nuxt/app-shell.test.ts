@@ -103,9 +103,9 @@ describe('application shell (app.vue)', () => {
     // Act: mount the shell, stubbing <NuxtPage /> so no page/route is loaded.
     const wrapper = await mountShell()
 
-    // Assert: the brand link shows "Nuxt Template" and targets "/".
+    // Assert: the brand link shows "ITS" and targets "/".
     const brandLink = wrapper.get('a[href="/"]')
-    expect(brandLink.text()).toContain('Nuxt Template')
+    expect(brandLink.text()).toContain('ITS')
     expect(brandLink.attributes('href')).toBe('/')
   })
 
@@ -124,6 +124,7 @@ describe('application shell (app.vue)', () => {
 
     // Assert: the ticket navigation lives in the top bar, not the dashboard page.
     expect(hrefs(wrapper)).toContain('/tickets')
+    expect(hrefs(wrapper)).toContain('/chat')
     expect(hrefs(wrapper)).toContain('/tickets/new')
   })
 
@@ -142,6 +143,7 @@ describe('application shell (app.vue)', () => {
 
     // Assert: no ticket navigation while unauthenticated.
     expect(wrapper.find('a[href="/tickets"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/chat"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/tickets/new"]').exists()).toBe(false)
   })
 
@@ -190,5 +192,20 @@ describe('application shell (app.vue)', () => {
       .element.closest('button')
     expect(accountButton).not.toBeNull()
     expect(accountButton!.getAttribute('aria-label')).toBe('Account')
+  })
+
+  it('renders both theme icons so the system preference still shows one', async () => {
+    // Arrange: the default color-mode preference is "system". During SSR that
+    // value is the string "system", not the resolved light/dark scheme.
+    const wrapper = await mountSuspended(App, {
+      global: { stubs: { NuxtPage: true } },
+    })
+
+    // Assert: sun and moon are both in the toggle. CSS shows the one that
+    // matches the .dark class, including when the preference is system.
+    const toggle = wrapper.get('[aria-label="Toggle Theme"]')
+    const html = toggle.html()
+    expect(html).toContain('i-heroicons:moon-20-solid')
+    expect(html).toContain('i-heroicons:sun-20-solid')
   })
 })

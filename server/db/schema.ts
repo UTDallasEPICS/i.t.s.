@@ -72,6 +72,8 @@ export const verification = sqliteTable('verification', {
 export const project = sqliteTable('project', {
   id: integer('id').primaryKey(),
   name: text('name').notNull(),
+  stageUrl: text('stageUrl'),
+  prodUrl: text('prodUrl'),
   // repo `full_name`. ex: `UTDallasEPICS/ITS`
   githubRepo: text('githubRepo').notNull(),
   projectPartnerId: text('projectPartnerId')
@@ -100,6 +102,7 @@ export const tickets = sqliteTable('tickets', {
 
 export const chatThreads = sqliteTable('chat_threads', {
   id: integer('id').primaryKey(),
+  name: text('name'),
   projectId: integer('projectId')
     .notNull()
     .references(() => project.id, { onDelete: 'cascade' }),
