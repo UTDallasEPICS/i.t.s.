@@ -11,6 +11,9 @@ const db = drizzle(sqlite, { schema })
 const USER_EMAIL = 'seeded-user@email.com'
 const PARTNER_NAME = 'Sample Seeded Project Partner'
 const GITHUB_REPO_ITS = process.env.GITHUB_REPO_ITS ?? ''
+// Where `pnpm sample-site` serves the demo page. The widget on it matches the seeded
+// project through this origin (the browser's Origin header).
+const SAMPLE_SITE_URL = 'http://localhost:4000'
 
 type SeededUser = typeof schema.user.$inferSelect
 // An organization is a project partner. The table keeps the Better Auth model
@@ -98,7 +101,19 @@ async function seedProject(partnerId: string) {
     where: (p, { eq }) => eq(p.id, 1),
   })
 
+  // The widget finds a project by its stage/prod URL origin. A project seeded before
+  // those columns existed has neither, so give it the sample site URL.
   if (existing) {
+    if (!existing.stageUrl && !existing.prodUrl) {
+      const [updated] = await db
+        .update(schema.project)
+        .set({ stageUrl: SAMPLE_SITE_URL })
+        .where(eq(schema.project.id, existing.id))
+        .returning()
+      console.log({ project: updated })
+      return updated ?? existing
+    }
+
     console.log({ project: existing })
     return existing
   }
@@ -110,8 +125,7 @@ async function seedProject(partnerId: string) {
       name: 'My Test Project',
       githubRepo: GITHUB_REPO_ITS,
       projectPartnerId: partnerId,
-      // The sample site (`pnpm sample-site`) is served from here; the widget finds the project by origin.
-      stageUrl: 'http://localhost:4000',
+      stageUrl: SAMPLE_SITE_URL,
     })
     .returning()
 
