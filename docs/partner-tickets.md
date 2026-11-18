@@ -34,30 +34,47 @@ Disallowed content edits return 403. No status mutation endpoint is added by thi
 Response shapes and ownership are recorded in [ADR 002](adr/002_shared_ticket_routes.md).
 There is no last-updated timestamp in the current schema; `timestamp` is creation time.
 
-## Shared form for the widget (#36)
+## Shared ticket form (#36)
 
-Import `app/components/TicketForm.vue` explicitly. It uses Vue imports and explicit Nuxt UI
-component imports, without Nuxt composables, auth calls or network requests. The consuming
-Vue build must configure Nuxt UI and its styles; #7 must confirm this in the widget bundle.
-The schema and payload type live in `shared/tickets.ts`.
+`app/components/shared/TicketForm.vue` is the one ticket form. The partner **New ticket**
+screen renders it as `<SharedTicketForm>` and the widget imports the same file in
+`widget/src/WidgetRoot.ce.vue`; there is no separate widget form. Following
+[ADR 004](adr/004_widget_isolation.md) it is plain Vue and plain CSS: no Nuxt composables,
+Nuxt UI, Tailwind, auth calls or network requests. It validates with the Zod schema in
+`shared/tickets.ts`, the same one the API uses, so the messages and the 200/5000 character
+limits match on both sides. A build outside Nuxt needs the `#shared` alias
+(see `widget/vite.config.ts`).
 
-| Prop/event                                  | Purpose                                                                               |
-| ------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `projects?: { id: number; name: string }[]` | Selectable partner projects (defaults to `[]`)                                        |
-| `projectId?: number`                        | Fixed widget project; hides the project selector and takes precedence over `projects` |
-| `submitting?: boolean`                      | Disables fields/submission and shows progress                                         |
-| `disabled?: boolean`                        | Disables the form without showing progress                                            |
-| `error` (optional string or null)           | Parent-provided error displayed as an alert                                           |
-| `submit(payload)`                           | Emits trimmed `{ projectId, title, description }`; parent performs the API request    |
+| Prop/event                                  | Purpose                                                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `projects?: { id: number; name: string }[]` | Selectable partner projects (defaults to `[]`)                                          |
+| `projectId?: number`                        | Fixed project; hides the project selector and takes precedence over `projects`          |
+| `omitProject?: boolean`                     | The parent resolves the project itself (widget site tag); the payload has no project    |
+| `submitting?: boolean`                      | Disables fields/submission and shows progress                                           |
+| `disabled?: boolean`                        | Disables the form without showing progress                                              |
+| `error` (optional string or null)           | Parent-provided error displayed as an alert                                             |
+| `submit(payload)`                           | Emits trimmed `{ projectId?, title, description }`; the parent performs the API request |
 
 ```vue
-<TicketForm :project-id="projectId" :submitting="pending" :error="error" @submit="submitTicket" />
+<!-- ITS: the partner chooses one of their projects -->
+<SharedTicketForm
+  :projects="projects"
+  :submitting="pending"
+  :error="error"
+  @submit="submitTicket"
+/>
+<!-- Widget: the site tag decides the project -->
+<TicketForm omit-project :submitting="pending" :error="error" @submit="submitTicket" />
 ```
+
+Colours come from `--its-form-*` CSS variables (`text`, `bg`, `border`, `radius`, `accent`,
+`accent-text`, `error`, `muted`, `label`) with light defaults. ITS maps them to Nuxt UI
+tokens in `app/assets/css/main.css`; a partner site can set them on `its-widget`.
 
 The form retains input after an error. The parent unmounts/resets it after a successful save.
 The API independently validates access; a fixed project prop is not authorization.
 Authenticated creation goes through `server/utils/create-ticket.ts`. The public widget
-endpoint must resolve site-tag access and integrate with the shared persistence contract.
+endpoint (#32) must resolve site-tag access and integrate with the shared persistence contract.
 Do not expose this authenticated helper as a public route or forge a session for widget users.
 
 ## October 18 milestone (#16): demonstration
@@ -76,16 +93,17 @@ this full fixture. The automated tests build it in memory without modifying loca
    Confirm the new status and that editing disappears when the ticket leaves `open`.
    Automated tests already verify changed database status appears on subsequent reads.
 
-Local validation on 2026-10-22: `pnpm lint` and `pnpm typecheck` passed; `pnpm test` passed all 127 tests across 8 files. Tests cover API access with disposable
-in-memory SQLite, UI states with mocked data, and a real Better Auth session-cookie journey
-with mocked email. They do not deliver email or create GitHub issues.
+Local validation on 2026-11-09: `pnpm lint` and `pnpm typecheck` passed; `pnpm test` passed
+all 280 tests across 23 files. Tests cover API access with disposable in-memory SQLite, UI
+states with mocked data, and a real Better Auth session-cookie journey with mocked email.
+They do not deliver email or create GitHub issues. The shared form was also exercised in a
+browser, both in an ITS page and in the built widget on `sample-site/`.
 
 ## Remaining work before closing the whole workstream (#5)
 
-- Merge/review this implementation and record the owner demo for #15/#16. No GitHub issue
-  has been closed by this change. #5 is a semester-long tracking issue.
-- #36/#7: widget owner confirms the actual bundle renders the component and receives its
-  handoff; the public widget endpoint must use the agreed creation contract.
+- #36/#7: the widget bundle now renders the shared form (it adds Zod, taking the bundle from
+  about 29 kB to 47 kB gzipped). The widget owner still confirms the handoff, and the public
+  widget endpoint (#32) must use the agreed creation contract.
 - #3: finalize shared creation integration across all submission paths and any future
   updated timestamp/status contract. The current helper covers authenticated ITS submission.
 - #8 / PR #66: integrate GitHub issue creation, reconcile the extracted create helper, and
