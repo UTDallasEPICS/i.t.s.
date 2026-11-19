@@ -54,12 +54,9 @@ describe('TicketStatusControl', () => {
     await mount()
     const select = wrapper.findComponent(USelect)
     expect(select.exists()).toBe(true)
-    // The items prop should cover every canonical status – check via rendered options in the DOM
-    // USelect renders a native <select> (or hidden input) with option elements we can inspect,
-    // but its internals vary. Fall back to asserting the prop value via the component's vm:
-    // Cast through unknown to access Vue internals safely across both vue-tsc and nuxi typecheck.
-    const vm = select.vm as unknown as { items: { value: string }[] }
-    expect(vm.items?.map((i) => i.value)).toEqual([...ticketStatuses])
+    // The items prop should cover every canonical status
+    const selectWithVm = select as unknown as { vm: { items?: { value: string }[] } }
+    expect(selectWithVm.vm.items?.map((i) => i.value)).toEqual([...ticketStatuses])
   })
 
   it('renders an "Update status" button that is disabled when status is unchanged', async () => {
