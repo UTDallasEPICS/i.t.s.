@@ -54,6 +54,9 @@
   const selectedOrgId = ref('')
   const updatingOrg = ref(false)
   const userToArchive = ref<User | null>(null)
+  const editingNameUserId = ref<string | null>(null)
+  const selectedName = ref('')
+  const updatingName = ref(false)
 
   const newUser = reactive({
     name: '',
@@ -287,6 +290,59 @@
     }
   }
 
+  function startEditingName(userId: string, name: string | null) {
+    editingNameUserId.value = userId
+    selectedName.value = name ?? ''
+  }
+
+  function cancelEditingName() {
+    editingNameUserId.value = null
+    selectedName.value = ''
+  }
+
+  async function updateUserName(userId: string) {
+    const name = selectedName.value.trim()
+
+    if (!name || name.length > 100) {
+      toast.add({
+        title: 'Invalid name',
+        description: 'Name must be between 1 and 100 characters.',
+        color: 'warning',
+      })
+      return
+    }
+
+    if (updatingName.value) return
+
+    try {
+      updatingName.value = true
+
+      await $fetch(`/api/users/${encodeURIComponent(userId)}`, {
+        method: 'PATCH',
+        body: { name },
+      })
+
+      await refreshUsers()
+      cancelEditingName()
+
+      toast.add({
+        title: 'Name updated',
+        description: 'The user name has been updated successfully.',
+        color: 'success',
+        icon: 'i-lucide-circle-check',
+      })
+    } catch (error) {
+      toast.add({
+        title: 'Could not update name',
+        description: getErrorMessage(error, 'Please try again.'),
+        color: 'error',
+        icon: 'i-lucide-circle-alert',
+      })
+    } finally {
+      updatingName.value = false
+    }
+  }
+
   function organizationName(orgId: string | null) {
     if (orgId === null) return 'Admin'
     return organizations.value.find((organization) => organization.id === orgId)?.name ?? 'Partner'
@@ -298,13 +354,13 @@
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-950 px-4 py-8 text-slate-50 sm:px-6 lg:py-12">
+  <main class="bg-default text-default min-h-screen px-4 py-8 sm:px-6 lg:py-12">
     <div class="mx-auto max-w-7xl space-y-6">
       <header class="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p class="text-primary-400 mb-2 text-xs font-bold tracking-[0.2em]">ADMIN DASHBOARD</p>
           <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">User Management</h1>
-          <p class="mt-2 text-sm text-slate-400 sm:text-base">
+          <p class="text-muted mt-2 text-sm sm:text-base">
             Manage users, partner organizations, and account access.
           </p>
         </div>
@@ -319,17 +375,18 @@
 
       <UCard
         :ui="{
-          root: 'bg-slate-900/70 ring-1 ring-slate-800',
-          header: 'border-b border-slate-800',
+          root: 'bg-elevated ring-1 ring-default',
+          header: 'border-b border-default',
           body: 'p-0 sm:p-0',
         }"
       >
         <template #header>
           <div class="flex items-center justify-between gap-4">
             <div>
-              <h2 class="font-semibold text-white">Registered Users</h2>
-              <p class="mt-1 text-sm text-slate-400">View and manage registered accounts.</p>
+              <h2 class="text-highlighted font-semibold">Registered Users</h2>
+              <p class="text-muted mt-1 text-sm">View and manage registered accounts.</p>
             </div>
+
             <UBadge color="neutral" variant="subtle" size="lg">
               {{ users.length }} {{ users.length === 1 ? 'user' : 'users' }}
             </UBadge>
@@ -345,8 +402,8 @@
 
         <div v-else-if="usersError || organizationsError" class="p-8 text-center">
           <UIcon name="i-lucide-cloud-alert" class="text-error-400 mx-auto size-10" />
-          <h3 class="mt-3 font-semibold text-white">Could not load user data</h3>
-          <p class="mt-1 text-sm text-slate-400">Check your connection, then try again.</p>
+          <h3 class="text-highlighted mt-3 font-semibold">Could not load user data</h3>
+          <p class="text-muted mt-1 text-sm">Check your connection, then try again.</p>
           <UButton
             class="mt-4"
             label="Try again"
@@ -356,9 +413,9 @@
         </div>
 
         <div v-else-if="users.length === 0" class="p-12 text-center">
-          <UIcon name="i-lucide-users" class="mx-auto size-10 text-slate-500" />
-          <h3 class="mt-3 font-semibold text-white">No users yet</h3>
-          <p class="mt-1 text-sm text-slate-400">Create the first user to get started.</p>
+          <UIcon name="i-lucide-users" class="text-dimmed mx-auto size-10" />
+          <h3 class="mt-3 font-semibold">No users yet</h3>
+          <p class="text-muted mt-1 text-sm">Create the first user to get started.</p>
           <UButton
             class="mt-4"
             label="Add user"
@@ -369,7 +426,7 @@
 
         <div v-else class="overflow-x-auto">
           <table class="w-full min-w-[900px] text-left text-sm">
-            <thead class="bg-slate-900 text-xs tracking-wide text-slate-400 uppercase">
+            <thead class="text-muted bg-slate-900 text-xs tracking-wide uppercase">
               <tr>
                 <th class="px-6 py-4 font-semibold">User</th>
                 <th class="px-6 py-4 font-semibold">Organization</th>
@@ -377,15 +434,58 @@
                 <th class="px-6 py-4 text-right font-semibold">Actions</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-800">
-              <tr
-                v-for="user in users"
-                :key="user.id"
-                class="transition-colors hover:bg-slate-800/50"
-              >
+            <tbody class="divide-default divide-y">
+              <tr v-for="user in users" :key="user.id" class="hover:bg-elevated transition-colors">
                 <td class="px-6 py-4">
-                  <div class="font-semibold text-white">{{ user.name || 'Unnamed User' }}</div>
-                  <div class="mt-1 text-slate-400">{{ user.email }}</div>
+                  <div v-if="editingNameUserId === user.id" class="flex items-center gap-2">
+                    <UInput
+                      v-model="selectedName"
+                      class="min-w-40"
+                      placeholder="Full name"
+                      :maxlength="100"
+                      :disabled="updatingName"
+                      @keyup.enter="updateUserName(user.id)"
+                      @keyup.esc="cancelEditingName"
+                    />
+
+                    <UButton
+                      label="Save"
+                      size="xs"
+                      :loading="updatingName"
+                      :disabled="!selectedName.trim() || updatingName"
+                      @click="updateUserName(user.id)"
+                    />
+
+                    <UButton
+                      icon="i-lucide-x"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      aria-label="Cancel name editing"
+                      :disabled="updatingName"
+                      @click="cancelEditingName"
+                    />
+                  </div>
+
+                  <div v-else class="flex items-center gap-2">
+                    <span class="text-highlighted font-semibold">
+                      {{ user.name || 'Unnamed User' }}
+                    </span>
+
+                    <UButton
+                      icon="i-lucide-pencil"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      aria-label="Edit user name"
+                      :disabled="editingNameUserId !== null || updatingName || user.isArchived"
+                      @click="startEditingName(user.id, user.name)"
+                    />
+                  </div>
+
+                  <div class="text-muted mt-1">
+                    {{ user.email }}
+                  </div>
                 </td>
                 <td class="px-6 py-4">
                   <div
@@ -416,7 +516,7 @@
                     />
                   </div>
                   <div v-else class="flex items-center gap-2">
-                    <span :class="user.orgId === null ? 'text-primary-300' : 'text-slate-300'">
+                    <span :class="user.orgId === null ? 'text-primary' : 'text-default'">
                       {{ organizationName(user.orgId) }}
                     </span>
                     <UButton
