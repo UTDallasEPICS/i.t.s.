@@ -7,6 +7,7 @@ import { db } from '../../../utils/db'
 import { project, organization } from '../../../db/schema'
 import { githubRepoSchema } from '../../../utils/github-repo-schema'
 import { projectUrlSchema } from '../../../utils/project-url-schema'
+import { subdomainSchema } from '../../../utils/npts-host'
 
 // Validate fields that can be updated.
 const updateProjectSchema = z
@@ -15,6 +16,7 @@ const updateProjectSchema = z
     organizationId: z.string().trim().min(1).optional(),
     stageUrl: projectUrlSchema.nullable().optional(),
     prodUrl: projectUrlSchema.nullable().optional(),
+    subdomain: subdomainSchema.nullable().optional(),
     githubRepo: githubRepoSchema.optional(),
   })
   .strict()
@@ -62,11 +64,13 @@ export default defineEventHandler(async (event) => {
 
   const newProdUrl = body.prodUrl !== undefined ? body.prodUrl : existingProject.prodUrl
 
-  // At least one URL must remain configured.
-  if (newStageUrl === null && newProdUrl === null) {
+  const newSubdomain = body.subdomain !== undefined ? body.subdomain : existingProject.subdomain
+
+  // The widget needs at least one way to find the project.
+  if (newStageUrl === null && newProdUrl === null && newSubdomain === null) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'At least one of stageUrl or prodUrl is required',
+      statusMessage: 'At least one of stageUrl, prodUrl or subdomain is required',
     })
   }
 
@@ -90,21 +94,38 @@ export default defineEventHandler(async (event) => {
     (url): url is string => url !== null && url !== undefined
   )
 
-  const [duplicateProject] = await db
-    .select({ id: project.id })
-    .from(project)
-    .where(
-      and(
-        ne(project.id, projectId),
-        or(...urls.flatMap((url) => [eq(project.stageUrl, url), eq(project.prodUrl, url)]))
-      )
-    )
+  // No URLs (subdomain only): skip, since an empty or() would match every project.
+  const [duplicateProject] = urls.length
+    ? await db
+        .select({ id: project.id })
+        .from(project)
+        .where(
+          and(
+            ne(project.id, projectId),
+            or(...urls.flatMap((url) => [eq(project.stageUrl, url), eq(project.prodUrl, url)]))
+          )
+        )
+    : []
 
   if (duplicateProject) {
     throw createError({
       statusCode: 409,
       statusMessage: 'Site URL already exists in another project',
     })
+  }
+
+  if (newSubdomain !== null) {
+    const [subdomainOwner] = await db
+      .select({ id: project.id })
+      .from(project)
+      .where(and(ne(project.id, projectId), eq(project.subdomain, newSubdomain)))
+
+    if (subdomainOwner) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Subdomain already exists in another project',
+      })
+    }
   }
   // Update only the fields provided in the request.
   const [updatedProject] = await db
@@ -116,6 +137,7 @@ export default defineEventHandler(async (event) => {
       }),
       ...(body.stageUrl !== undefined && { stageUrl: body.stageUrl }),
       ...(body.prodUrl !== undefined && { prodUrl: body.prodUrl }),
+      ...(body.subdomain !== undefined && { subdomain: body.subdomain }),
       ...(body.githubRepo !== undefined && { githubRepo: body.githubRepo }),
     })
     .where(eq(project.id, projectId))

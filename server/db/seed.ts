@@ -135,45 +135,79 @@ async function seedProject(partnerId: string) {
 
 // Partner project repos. Keep these in sync with the EPICS project list; repos
 // are matched by githubRepo so re-running the seed never duplicates a project.
-const SEED_PROJECTS: { name: string; githubRepo: string }[] = [
-  { name: 'friendsofmlk', githubRepo: 'UTDallasEPICS/Reading-MLK' },
+// `subdomain` is the NPTS infra `subdomain_name` for projects deployed on
+// npts.tech; the widget finds the project by it (<subdomain>-stage.npts.tech
+// and <subdomain>.npts.tech). Projects not in the infra list have none.
+const SEED_PROJECTS: { name: string; githubRepo: string; subdomain?: string }[] = [
+  { name: 'friendsofmlk', githubRepo: 'UTDallasEPICS/Reading-MLK', subdomain: 'friendsofmlk' },
   { name: 'EPICS Alumni Tracker', githubRepo: 'UTDallasEPICS/epics-alumni' },
-  { name: 'Participant and Intern Attendance Tracking System', githubRepo: 'UTDallasEPICS/wwm-impact-crm' },
-  { name: 'samaritan-inn', githubRepo: 'UTDallasEPICS/the-samaritan-inn' },
-  { name: 'vets4war', githubRepo: 'UTDallasEPICS/vets4war' },
+  {
+    name: 'Participant and Intern Attendance Tracking System',
+    githubRepo: 'UTDallasEPICS/wwm-impact-crm',
+  },
+  {
+    name: 'samaritan-inn',
+    githubRepo: 'UTDallasEPICS/the-samaritan-inn',
+    subdomain: 'samaritan-inn',
+  },
+  { name: 'vets4war', githubRepo: 'UTDallasEPICS/vets4war', subdomain: 'vets4war' },
   { name: 'AI-Driven Mentorship Platform', githubRepo: 'UTDallasEPICS/lwf-aidmp' },
   { name: 'PawGo', githubRepo: 'UTDallasEPICS/bvrit' },
   { name: 'Digital Twister Game', githubRepo: 'UTDallasEPICS/sw-dtg' },
-  { name: 'beyond-neuro', githubRepo: 'UTDallasEPICS/beyond-neuro' },
+  { name: 'beyond-neuro', githubRepo: 'UTDallasEPICS/beyond-neuro', subdomain: 'beyond-neuro' },
   { name: 'DFW Mental Health Resource Hub', githubRepo: 'UTDallasEPICS/a-mindful-resource' },
   { name: 'EPICS Super App (ESA)', githubRepo: 'UTDallasEPICS/e.s.a.' },
-  { name: 'rainbow-roundup', githubRepo: 'UTDallasEPICS/Rainbow-Roundup-Calendar-Event-App' },
+  {
+    name: 'rainbow-roundup',
+    githubRepo: 'UTDallasEPICS/Rainbow-Roundup-Calendar-Event-App',
+    subdomain: 'rainbow-roundup',
+  },
   { name: 'Digital Neighborhood/Building Block', githubRepo: 'UTDallasEPICS/brain-healthy' },
   { name: 'Indoor Navigator', githubRepo: 'UTDallasEPICS/IndoorNav' },
-  { name: 'hope-restored', githubRepo: 'UTDallasEPICS/Hope-Restored-Inventory-Tracking' },
-  { name: 'mplf', githubRepo: 'UTDallasEPICS/mckinney-library-foundation' },
-  { name: 'hch', githubRepo: 'UTDallasEPICS/hch' },
-  { name: 'its', githubRepo: 'UTDallasEPICS/i.t.s.' },
+  {
+    name: 'hope-restored',
+    githubRepo: 'UTDallasEPICS/Hope-Restored-Inventory-Tracking',
+    subdomain: 'hope-restored',
+  },
+  { name: 'mplf', githubRepo: 'UTDallasEPICS/mckinney-library-foundation', subdomain: 'mplf' },
+  { name: 'hch', githubRepo: 'UTDallasEPICS/hch', subdomain: 'hch' },
+  { name: 'its', githubRepo: 'UTDallasEPICS/i.t.s.', subdomain: 'support' },
   { name: 'Digital Learning Platform', githubRepo: 'UTDallasEPICS/sw-dlp' },
   { name: 'Inventory and Production Tracking', githubRepo: 'UTDallasEPICS/xuchil' },
   { name: 'Caregiver Compassion Bot — Software Team', githubRepo: 'UTDallasEPICS/BrainCharge' },
-  { name: 'carsons-village', githubRepo: 'UTDallasEPICS/Carson-s-Village' },
-  { name: 'abide-connect', githubRepo: 'UTDallasEPICS/abide-connect' },
-  { name: 'sba', githubRepo: 'UTDallasEPICS/shaken-baby-alliance-cope' },
-  { name: 'kidsu', githubRepo: 'UTDallasEPICS/Kids-U-Database-Reporting' },
-  { name: 'ud', githubRepo: 'UTDallasEPICS/Unlocking-Doors' },
-  { name: 'sos', githubRepo: 'UTDallasEPICS/sos-noble-awards' },
-  { name: 'wcoa', githubRepo: 'UTDallasEPICS/wcoa' },
-  { name: 'mttp', githubRepo: 'UTDallasEPICS/mttp' },
-  { name: 'twci', githubRepo: 'UTDallasEPICS/twci' },
-  { name: 'esperanza', githubRepo: 'UTDallasEPICS/esperanza' },
-  { name: 'ccf-aass', githubRepo: 'UTDallasEPICS/ccf-aass' },
-  { name: 'cc', githubRepo: 'UTDallasEPICS/cc' },
-  { name: 'aware-together', githubRepo: 'UTDallasEPICS/aware-together' },
-  { name: 'utdprocurement', githubRepo: 'UTDallasEPICS/utdprocurement' },
-  { name: 'b4g-email-automation', githubRepo: 'UTDallasEPICS/b4g-email-automation' },
-  { name: 'notes', githubRepo: 'UTDallasEPICS/notes' },
-  { name: 'nuxt-template', githubRepo: 'UTDallasEPICS/nuxt-template' },
+  {
+    name: 'carsons-village',
+    githubRepo: 'UTDallasEPICS/Carson-s-Village',
+    subdomain: 'carsons-village',
+  },
+  { name: 'abide-connect', githubRepo: 'UTDallasEPICS/abide-connect', subdomain: 'abide-connect' },
+  { name: 'sba', githubRepo: 'UTDallasEPICS/shaken-baby-alliance-cope', subdomain: 'sba' },
+  { name: 'kidsu', githubRepo: 'UTDallasEPICS/Kids-U-Database-Reporting', subdomain: 'kidsu' },
+  { name: 'ud', githubRepo: 'UTDallasEPICS/Unlocking-Doors', subdomain: 'unlocking-doors' },
+  { name: 'sos', githubRepo: 'UTDallasEPICS/sos-noble-awards', subdomain: 'sos-noble-awards' },
+  { name: 'wcoa', githubRepo: 'UTDallasEPICS/wcoa', subdomain: 'wcoa' },
+  { name: 'mttp', githubRepo: 'UTDallasEPICS/mttp', subdomain: 'mttp' },
+  { name: 'twci', githubRepo: 'UTDallasEPICS/twci', subdomain: 'twci' },
+  { name: 'esperanza', githubRepo: 'UTDallasEPICS/esperanza', subdomain: 'esperanza' },
+  { name: 'ccf-aass', githubRepo: 'UTDallasEPICS/ccf-aass', subdomain: 'ccf-aass' },
+  { name: 'cc', githubRepo: 'UTDallasEPICS/cc', subdomain: 'cc' },
+  {
+    name: 'aware-together',
+    githubRepo: 'UTDallasEPICS/aware-together',
+    subdomain: 'aware-together',
+  },
+  {
+    name: 'utdprocurement',
+    githubRepo: 'UTDallasEPICS/utdprocurement',
+    subdomain: 'utdprocurement',
+  },
+  {
+    name: 'b4g-email-automation',
+    githubRepo: 'UTDallasEPICS/b4g-email-automation',
+    subdomain: 'feedback',
+  },
+  { name: 'notes', githubRepo: 'UTDallasEPICS/notes', subdomain: 'notes' },
+  { name: 'nuxt-template', githubRepo: 'UTDallasEPICS/nuxt-template', subdomain: 'nuxt-template' },
 ]
 
 async function seedPartnerProjects(partnerId: string) {
@@ -182,10 +216,11 @@ async function seedPartnerProjects(partnerId: string) {
       where: (p, { eq }) => eq(p.githubRepo, seedProject.githubRepo),
     })
     if (existing) {
-      if (existing.name !== seedProject.name) {
+      const subdomain = seedProject.subdomain ?? existing.subdomain
+      if (existing.name !== seedProject.name || existing.subdomain !== subdomain) {
         await db
           .update(schema.project)
-          .set({ name: seedProject.name })
+          .set({ name: seedProject.name, subdomain })
           .where(eq(schema.project.id, existing.id))
       }
       continue
@@ -221,12 +256,34 @@ async function seedChatThreads() {
       projectId: project.id,
       members: [admin.id, user.id],
       messages: [
-        { userId: user.id, plainTextBody: 'Hi! We are preparing the community website for launch next week.' },
-        { userId: admin.id, plainTextBody: 'Great. Which part would you like us to take a look at first?' },
-        { userId: user.id, plainTextBody: 'The volunteer signup form. A few people said they could not finish submitting it on their phone.' },
-        { userId: admin.id, plainTextBody: 'Could you share the browser and the step where they got stuck? We can try to reproduce it.' },
-        { userId: user.id, plainTextBody: 'Safari on an iPhone. It happens after they select their availability and press Continue.' },
-        { userId: admin.id, plainTextBody: 'Thanks, that gives us a good starting point. We will check the mobile layout and validation.' },
+        {
+          userId: user.id,
+          plainTextBody: 'Hi! We are preparing the community website for launch next week.',
+        },
+        {
+          userId: admin.id,
+          plainTextBody: 'Great. Which part would you like us to take a look at first?',
+        },
+        {
+          userId: user.id,
+          plainTextBody:
+            'The volunteer signup form. A few people said they could not finish submitting it on their phone.',
+        },
+        {
+          userId: admin.id,
+          plainTextBody:
+            'Could you share the browser and the step where they got stuck? We can try to reproduce it.',
+        },
+        {
+          userId: user.id,
+          plainTextBody:
+            'Safari on an iPhone. It happens after they select their availability and press Continue.',
+        },
+        {
+          userId: admin.id,
+          plainTextBody:
+            'Thanks, that gives us a good starting point. We will check the mobile layout and validation.',
+        },
       ],
     },
     {
@@ -259,19 +316,23 @@ async function seedChatThreads() {
       throw new Error(`failed to seed chat thread ${thread.id}`)
     }
 
-    await db.insert(schema.chatThreadMembers).values(
-      thread.members.map(userId => ({ threadId: created.id, userId })),
-    )
+    await db
+      .insert(schema.chatThreadMembers)
+      .values(thread.members.map((userId) => ({ threadId: created.id, userId })))
 
     await db.insert(schema.chatThreadMessages).values(
       thread.messages.map((message, index) => ({
         ...message,
         threadId: created.id,
         createdAt: new Date(Date.now() - (thread.messages.length - index) * 60_000),
-      })),
+      }))
     )
 
-    console.log({ chatThread: created, members: thread.members.length, messages: thread.messages.length })
+    console.log({
+      chatThread: created,
+      members: thread.members.length,
+      messages: thread.messages.length,
+    })
   }
 }
 

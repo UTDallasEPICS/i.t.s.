@@ -7,11 +7,23 @@ import {
   setResponseHeader,
   setResponseStatus,
 } from 'h3'
+import { z } from 'zod'
+import { eq } from 'drizzle-orm'
 import { updateTicketSchema } from '#shared/tickets'
 import { project, tickets } from '../../db/schema'
 import { db } from '../../utils/db'
 import { createGitHubIssue } from '../../utils/github-issues'
 import { checkRateLimit } from '../../utils/rateLimit'
+import { verifyAltcha } from '../../utils/altcha'
+import { parseNptsOrigin } from '../../utils/npts-host'
+
+// Same fields as a partner ticket (title, description), plus the ALTCHA payload.
+// Strict, so callers can't set project, status, author or timestamps.
+const widgetTicketSchema = z.strictObject({
+  ...updateTicketSchema.shape,
+  // ALTCHA payload from the widget (Base64 JSON). Checked below, not trusted.
+  altcha: z.string().min(1).max(10_000),
+})
 
 // Limits from ADR 006. Starting values; tune with real traffic.
 const PER_CLIENT = { max: 3, windowMs: 10_000, cooldownMs: 5 * 60_000 }
@@ -26,13 +38,38 @@ function originOf(value: string | null | undefined) {
   }
 }
 
+const projectColumns = { id: project.id, githubRepo: project.githubRepo }
+
+// Sites on npts.tech are found by the project's subdomain, which both the stage
+// and prod hosts carry. Any other site (custom domains, localhost) is found by
+// its stored stage or prod URL.
+function findProjectByOrigin(header: string | null | undefined) {
+  const site = parseNptsOrigin(header)
+  if (site) {
+    return db
+      .select(projectColumns)
+      .from(project)
+      .where(eq(project.subdomain, site.subdomain))
+      .get()
+  }
+
+  const origin = originOf(header)
+  if (!origin) return undefined
+  // ponytail: scans every project, since URLs may carry paths and SQL can't compare
+  // origins. Fine for tens of projects; add an indexed origin column past that.
+  return db
+    .select({ ...projectColumns, stageUrl: project.stageUrl, prodUrl: project.prodUrl })
+    .from(project)
+    .orderBy(project.id)
+    .all()
+    .find((p) => originOf(p.stageUrl) === origin || originOf(p.prodUrl) === origin)
+}
+
 // Public endpoint: lets the embeddable widget submit a ticket without a session.
-// The project is the one whose stage or prod URL has the same origin as the page
-// that embeds the widget (the browser sends it as the Origin header).
+// The project comes from the origin of the page that embeds the widget (the
+// browser sends it as the Origin header); see findProjectByOrigin.
 export default defineEventHandler(async (event) => {
-  // Accept only title and description (the schema is strict). Project, status,
-  // author and timestamps are decided by the server, not the caller.
-  const result = updateTicketSchema.safeParse(await readBody(event))
+  const result = widgetTicketSchema.safeParse(await readBody(event))
 
   if (!result.success) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid ticket data' })
@@ -50,23 +87,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, statusMessage: 'Too Many Requests' })
   }
 
+  // Proof that a browser solved our challenge (ADR 005). Checked after the rate
+  // limit, so bots can't make us run many verifications.
+  if (!(await verifyAltcha(result.data.altcha))) {
+    throw createError({ statusCode: 400, statusMessage: 'Verification failed' })
+  }
+
   // Find the project this widget is embedded in.
-  const origin = originOf(getRequestHeader(event, 'origin'))
-  // ponytail: scans every project, since URLs may carry paths and SQL can't compare
-  // origins. Fine for tens of projects; add an indexed origin column past that.
-  const targetProject = origin
-    ? db
-        .select({
-          id: project.id,
-          githubRepo: project.githubRepo,
-          stageUrl: project.stageUrl,
-          prodUrl: project.prodUrl,
-        })
-        .from(project)
-        .orderBy(project.id)
-        .all()
-        .find((p) => originOf(p.stageUrl) === origin || originOf(p.prodUrl) === origin)
-    : undefined
+  const targetProject = findProjectByOrigin(getRequestHeader(event, 'origin'))
 
   // Generic response: don't reveal which sites exist.
   if (!targetProject) {

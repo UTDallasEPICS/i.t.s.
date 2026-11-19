@@ -8,6 +8,10 @@ import { resetRateLimits } from '../../server/utils/rateLimit'
 import widgetTicketsHandler from '../../server/api/widget/tickets.post'
 import { createGitHubIssue } from '../../server/utils/github-issues'
 
+// ALTCHA itself is tested in altcha.test.ts. Here we only control its answer.
+const { verifyAltcha } = vi.hoisted(() => ({ verifyAltcha: vi.fn() }))
+vi.mock('../../server/utils/altcha', () => ({ verifyAltcha }))
+
 // Use an in-memory database, same as the partner ticket API tests.
 vi.mock('../../server/utils/db', async () => {
   const { default: Database } = await import('better-sqlite3')
@@ -24,6 +28,7 @@ db.$client.pragma('foreign_keys = ON')
 const validTicket = {
   title: '  Registration form is broken  ',
   description: '  Nothing happens when I click Submit.  ',
+  altcha: 'solved-payload',
 }
 
 // The browser sends the embedding page's origin; the endpoint finds the project from it.
@@ -53,6 +58,9 @@ function expectNoTickets() {
 describe('POST /api/widget/tickets', () => {
   beforeEach(() => {
     resetRateLimits()
+
+    verifyAltcha.mockReset()
+    verifyAltcha.mockResolvedValue(true)
     // tickets.githubIssueId is unique, so every issue needs its own number.
     let issueNumber = 41
     vi.mocked(createGitHubIssue)
@@ -82,6 +90,14 @@ describe('POST /api/widget/tickets', () => {
         },
         // A project with no URLs: no page can match it.
         { id: 3, name: 'Website C', githubRepo: 'example/c', projectPartnerId: 'org-a' },
+        // Deployed on npts.tech: found by subdomain on stage and prod, no URLs.
+        {
+          id: 4,
+          name: 'ITS',
+          githubRepo: 'UTDallasEPICS/ITS',
+          projectPartnerId: 'org-a',
+          subdomain: 'support',
+        },
       ])
       .run()
   })
@@ -124,6 +140,20 @@ describe('POST /api/widget/tickets', () => {
     expect(db.select().from(tickets).get()?.projectId).toBe(1)
   })
 
+  it.each([
+    ['stage host by subdomain', 'https://support-stage.npts.tech'],
+    ['prod host by subdomain, ignoring case', 'https://SUPPORT.npts.tech'],
+  ])('finds an npts.tech project: %s', async (_name, origin) => {
+    const response = await request(validTicket, { origin })
+    expect(response.status).toBe(201)
+    expect(db.select().from(tickets).get()?.projectId).toBe(4)
+    expect(createGitHubIssue).toHaveBeenCalledWith(
+      'UTDallasEPICS/ITS',
+      expect.any(String),
+      expect.any(String)
+    )
+  })
+
   it('does not save a ticket when the GitHub issue cannot be created', async () => {
     vi.mocked(createGitHubIssue).mockRejectedValue(
       Object.assign(new Error('boom'), { statusCode: 502 })
@@ -141,6 +171,13 @@ describe('POST /api/widget/tickets', () => {
     ['opaque origin', { origin: 'null' }],
     ['garbage origin', { origin: 'not a url' }],
     ['no origin header', {}],
+    ['unknown npts subdomain', { origin: 'https://nope-stage.npts.tech' }],
+    ['unknown npts prod subdomain', { origin: 'https://nope.npts.tech' }],
+    ['repo name instead of subdomain on stage', { origin: 'https://its-stage.npts.tech' }],
+    ['repo name instead of subdomain on prod', { origin: 'https://its.npts.tech' }],
+    ['old prod- prefix', { origin: 'https://prod-support.npts.tech' }],
+    ['npts over http', { origin: 'http://support-stage.npts.tech' }],
+    ['npts look-alike host', { origin: 'https://support-stage.npts.tech.evil.test' }],
   ])('rejects %s with a generic 404', async (_name, headers) => {
     const response = await request(validTicket, headers)
     expect(response.status).toBe(404)
@@ -158,6 +195,8 @@ describe('POST /api/widget/tickets', () => {
     ['too long title', { ...validTicket, title: 'a'.repeat(201) }],
     ['missing description', { title: 'Issue' }],
     ['too long description', { ...validTicket, description: 'a'.repeat(5001) }],
+    ['missing altcha', { siteTag: 'site-a', title: 'Issue', description: 'Details' }],
+    ['blank altcha', { ...validTicket, altcha: '' }],
   ])('rejects invalid input: %s', async (_name, body) => {
     const response = await request(body)
     expect(response.status).toBe(400)
@@ -221,5 +260,21 @@ describe('POST /api/widget/tickets', () => {
       'x-forwarded-for': '10.0.0.99, 9.9.9.9',
     })
     expect(blocked.status).toBe(429)
+  })
+
+  it('rejects a ticket when the ALTCHA check fails', async () => {
+    verifyAltcha.mockResolvedValue(false)
+    const response = await request()
+    expect(response.status).toBe(400)
+    expect(verifyAltcha).toHaveBeenCalledWith('solved-payload')
+    expectNoTickets()
+  })
+
+  it('checks the rate limit before running the ALTCHA check', async () => {
+    for (let i = 0; i < 3; i++) await request()
+    verifyAltcha.mockClear()
+
+    expect((await request()).status).toBe(429)
+    expect(verifyAltcha).not.toHaveBeenCalled()
   })
 })

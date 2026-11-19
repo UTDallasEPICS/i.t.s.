@@ -1,5 +1,7 @@
 <script setup lang="ts">
   import { ref } from 'vue'
+  // Registers the <altcha-widget> custom element.
+  import 'altcha'
   // Shared components that live in the main ITS app (app/components/shared).
   // The ticket form is the same one the partner "New ticket" screen renders.
   import StatusPill from '../../app/components/shared/StatusPill.vue'
@@ -18,6 +20,10 @@
   const result = ref<'idle' | 'sent' | 'error'>('idle')
   const message = ref('')
 
+  // ALTCHA payload, set once the browser has solved the challenge (ADR 005).
+  const altchaPayload = ref('')
+  const altchaEl = ref<HTMLElement & { reset: () => void; verify: () => void }>()
+
   // Reachability check only: /api/health does not validate the embedding site.
 
   async function checkConnection() {
@@ -35,16 +41,35 @@
     if (open.value) checkConnection()
   }
 
-  // The form only reports what the user typed; the widget sends it to ITS.
-  // With omit-project the payload is { title, description }: the page origin picks the project.
+  // Keep the payload only while ALTCHA says it's verified (not expired or failed).
+  function onAltchaState(ev: Event) {
+    const { state, payload } = (ev as CustomEvent<{ state: string; payload?: string }>).detail
+    altchaPayload.value = state === 'verified' && payload ? payload : ''
+  }
+
+  // Each payload works only once, so start a new challenge for the next try.
+  function renewAltcha() {
+    altchaPayload.value = ''
+    altchaEl.value?.reset()
+    altchaEl.value?.verify()
+  }
+
+  // The form only reports what the user typed; the widget adds the ALTCHA payload
+  // and sends it to ITS. The page origin picks the project.
   async function submitTicket(ticket: TicketSubmission) {
+    if (!altchaPayload.value) {
+      result.value = 'error'
+      message.value = 'Still checking that you are not a robot. Please try again in a moment.'
+      return
+    }
+
     submitting.value = true
     message.value = ''
     try {
       const res = await fetch(`${props.apiBase}/api/widget/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ticket),
+        body: JSON.stringify({ ...ticket, altcha: altchaPayload.value }),
       })
 
       if (res.status === 201) {
@@ -66,6 +91,7 @@
       message.value = 'Could not reach ITS. Please try again later.'
     } finally {
       submitting.value = false
+      if (result.value !== 'sent') renewAltcha()
     }
   }
 
@@ -98,6 +124,13 @@
           :error="result === 'error' ? message : null"
           @submit="submitTicket"
         />
+        <!-- Solves the challenge in the background as soon as the form opens. -->
+        <altcha-widget
+          ref="altchaEl"
+          auto="onload"
+          :challenge="`${apiBase}/api/widget/challenge`"
+          @statechange="onAltchaState"
+        />
       </template>
     </div>
     <button class="launcher" @click="toggle">?</button>
@@ -105,6 +138,10 @@
 </template>
 
 <style>
+  /* ALTCHA injects its CSS into document.head, which can't reach our Shadow DOM.
+     Import it here so it's bundled into the widget's shadow root. */
+  @import 'altcha/altcha.css';
+
   :host {
     all: initial; /* don't inherit fonts/colors from the host page */
   }

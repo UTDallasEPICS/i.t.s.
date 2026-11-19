@@ -16,6 +16,7 @@
   const githubRepo = ref('')
   const stageUrl = ref('')
   const prodUrl = ref('')
+  const subdomain = ref('')
 
   // Populate the form when the selected project changes
   watch(
@@ -28,6 +29,7 @@
       githubRepo.value = value.githubRepo
       stageUrl.value = value.stageUrl ?? ''
       prodUrl.value = value.prodUrl ?? ''
+      subdomain.value = value.subdomain ?? ''
     },
     { immediate: true }
   )
@@ -49,9 +51,9 @@
       return
     }
 
-    if (!stageUrl.value.trim() && !prodUrl.value.trim()) {
+    if (!stageUrl.value.trim() && !prodUrl.value.trim() && !subdomain.value.trim()) {
       toast.add({
-        title: 'At least one staging or production URL is required.',
+        title: 'A staging URL, production URL or NPTS subdomain is required.',
         color: 'error',
       })
       return
@@ -68,6 +70,7 @@
           githubRepo: githubRepo.value.trim(),
           stageUrl: stageUrl.value.trim() || null,
           prodUrl: prodUrl.value.trim() || null,
+          subdomain: subdomain.value.trim() || null,
         },
       })
 
@@ -142,6 +145,13 @@
 
     <UFormField label="Production URL">
       <UInput v-model="prodUrl" class="w-full" />
+    </UFormField>
+
+    <UFormField
+      label="NPTS Subdomain"
+      help="subdomain_name from the NPTS infra config, e.g. support for support-stage.npts.tech and support.npts.tech"
+    >
+      <UInput v-model="subdomain" placeholder="support" class="w-full" />
     </UFormField>
 
     <div class="flex justify-end">

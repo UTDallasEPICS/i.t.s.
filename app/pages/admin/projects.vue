@@ -80,6 +80,10 @@
         <p class="text-muted text-sm">Staging: {{ project.stageUrl ?? 'Not configured' }}</p>
 
         <p class="text-muted text-sm">Production: {{ project.prodUrl ?? 'Not configured' }}</p>
+
+        <p class="text-muted text-sm">
+          NPTS subdomain: {{ project.subdomain ?? 'Not configured' }}
+        </p>
       </UCard>
     </div>
     <UModal v-model:open="showCreateModal" title="Create Project">
