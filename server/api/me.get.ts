@@ -7,5 +7,11 @@ export default defineEventHandler(async (event) => {
 
   return {
     isAdmin: isAdmin(orgId),
+    user: {
+      id: currentUser.id,
+      name: currentUser.name,
+      email: currentUser.email,
+      image: currentUser.image ?? null,
+    },
   }
 })

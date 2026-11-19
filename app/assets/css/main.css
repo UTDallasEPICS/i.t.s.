@@ -1,2 +1,15 @@
 @import 'tailwindcss';
 @import '@nuxt/ui';
+
+/* The shared ticket form (app/components/shared/TicketForm.vue) is plain CSS so
+   the widget can bundle it. Inside ITS, point its theme variables at Nuxt UI. */
+.its-ticket-form {
+  --its-form-text: var(--ui-text-highlighted);
+  --its-form-bg: var(--ui-bg);
+  --its-form-border: var(--ui-border-accented);
+  --its-form-radius: var(--ui-radius);
+  --its-form-accent: var(--ui-primary);
+  --its-form-accent-text: var(--ui-text-inverted);
+  --its-form-error: var(--ui-error);
+  --its-form-muted: var(--ui-text-muted);
+}

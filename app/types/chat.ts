@@ -28,8 +28,8 @@ export type ChatSubscriptionHandlers = {
   onMessage: (message: ChatWireMessage) => void
   onStatusChange?: (status: ChatConnectionStatus) => void
   /**
-   * Called after a dropped connection is restored. The adapter cannot know what
-   * the consumer has already rendered, so the consumer fetches the gap itself.
+   * Called when the server's live feed is ready, initially and after reconnect.
+   * The consumer reconciles any gap after its initial history has loaded.
    */
   onResync?: () => void | Promise<void>
 }

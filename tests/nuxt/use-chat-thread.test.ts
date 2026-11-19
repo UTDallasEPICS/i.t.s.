@@ -162,6 +162,25 @@ describe('useChatThread', () => {
     expect(thread.messages.value.map((message) => message.id)).toEqual([1, 2, 3])
   })
 
+  it('keeps a monotonic history cursor when live events overtake a failed catch-up', async () => {
+    const { adapter, loadMessages } = createAdapter()
+    loadMessages.mockResolvedValueOnce(page([wireMessage(1)]))
+    loadMessages.mockResolvedValueOnce({ messages: [wireMessage(2)], metadata: { hasMore: true } })
+    loadMessages.mockRejectedValueOnce(new Error('offline'))
+    loadMessages.mockResolvedValueOnce(page([wireMessage(3), wireMessage(4)]))
+    const subscription = addSubscription(adapter)
+    const thread = useChatThread(adapter)
+    await thread.start()
+    subscription.handlers?.onMessage(wireMessage(4))
+    await subscription.handlers?.onResync?.()
+    await subscription.handlers?.onResync?.()
+
+    expect(loadMessages).toHaveBeenNthCalledWith(2, { after: 1 })
+    expect(loadMessages).toHaveBeenNthCalledWith(3, { after: 2 })
+    expect(loadMessages).toHaveBeenNthCalledWith(4, { after: 2 })
+    expect(thread.messages.value.map(message => message.id)).toEqual([1, 2, 3, 4])
+  })
+
   it('loads older pages with a before cursor and reports exhaustion', async () => {
     const { adapter, loadMessages } = createAdapter()
     loadMessages.mockResolvedValueOnce({
@@ -205,6 +224,70 @@ describe('useChatThread', () => {
     expect(loadMessages).toHaveBeenNthCalledWith(2, { after: 1 })
     expect(loadMessages).toHaveBeenNthCalledWith(3, { after: 3 })
     expect(thread.messages.value.map((message) => message.id)).toEqual([1, 2, 3, 4])
+  })
+
+  it('continues past a full catch-up batch to fetch a gap after 2500 live messages', async () => {
+    const { adapter, loadMessages } = createAdapter()
+    loadMessages.mockResolvedValueOnce(page([wireMessage(1)]))
+    const subscription = addSubscription(adapter)
+    const thread = useChatThread(adapter)
+    await thread.start()
+    for (let id = 2; id <= 2501; id += 1) subscription.handlers?.onMessage(wireMessage(id))
+    const stored = Array.from({ length: 2501 }, (_, index) => wireMessage(index + 2))
+    loadMessages.mockImplementation(async (options?: { after?: number }) => {
+      const remaining = stored.filter(message => message.id > (options?.after ?? 0))
+      return { messages: remaining.slice(0, 25), metadata: { hasMore: remaining.length > 25 } }
+    })
+
+    await subscription.handlers?.onResync?.()
+
+    expect(loadMessages).toHaveBeenCalledTimes(102)
+    expect(loadMessages).toHaveBeenLastCalledWith({ after: 2501 })
+    expect(thread.lastMessageId.value).toBe(2502)
+    expect(thread.messages.value).toHaveLength(2502)
+  }, 10_000)
+
+  it.each([{ rows: [] }, { rows: [wireMessage(1)] }])('stops catch-up when hasMore is true without cursor progress ($rows)', async ({ rows }) => {
+    const { adapter, loadMessages } = createAdapter()
+    loadMessages.mockResolvedValueOnce(page([wireMessage(1)]))
+    loadMessages.mockResolvedValue({ messages: rows, metadata: { hasMore: true } })
+    const subscription = addSubscription(adapter)
+    const thread = useChatThread(adapter)
+    await thread.start()
+    await subscription.handlers?.onResync?.()
+    expect(loadMessages).toHaveBeenCalledTimes(2)
+  })
+
+  it('consumes a ready queued during a failed resync without requiring another ready', async () => {
+    const { adapter, loadMessages } = createAdapter()
+    loadMessages.mockResolvedValueOnce(page([wireMessage(1)]))
+    let rejectLoad!: (error: Error) => void
+    loadMessages.mockReturnValueOnce(new Promise<ChatMessagePage>((_, reject) => { rejectLoad = reject }))
+    loadMessages.mockResolvedValueOnce(page([wireMessage(2)]))
+    const subscription = addSubscription(adapter)
+    const thread = useChatThread(adapter)
+    await thread.start()
+
+    const resyncing = subscription.handlers?.onResync?.()
+    await subscription.handlers?.onResync?.()
+    expect(loadMessages).toHaveBeenCalledTimes(2)
+    rejectLoad(new Error('old connection failed'))
+    await resyncing
+
+    expect(loadMessages).toHaveBeenCalledTimes(3)
+    expect(loadMessages).toHaveBeenLastCalledWith({ after: 1 })
+    expect(thread.messages.value.map(message => message.id)).toEqual([1, 2])
+  })
+
+  it('does not retry a failed resync without another ready', async () => {
+    const { adapter, loadMessages } = createAdapter()
+    loadMessages.mockResolvedValueOnce(page([wireMessage(1)]))
+    loadMessages.mockRejectedValue(new Error('offline'))
+    const subscription = addSubscription(adapter)
+    const thread = useChatThread(adapter)
+    await thread.start()
+    await subscription.handlers?.onResync?.()
+    expect(loadMessages).toHaveBeenCalledTimes(2)
   })
 
   it('surfaces connection transitions from the adapter', async () => {

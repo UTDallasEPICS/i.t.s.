@@ -33,7 +33,9 @@ const { mockFetch, resetIssueNumber } = vi.hoisted(() => {
   })
   return {
     mockFetch,
-    resetIssueNumber: () => { issueNum = 100 },
+    resetIssueNumber: () => {
+      issueNum = 100
+    },
   }
 })
 
@@ -240,6 +242,8 @@ describe('POST /api/tickets', () => {
     ['missing description', { projectId: 1, title: 'Issue' }],
     ['blank description', { ...validTicket, description: ' \n ' }],
     ['non-text description', { ...validTicket, description: { text: 'Details' } }],
+    ['title over 200 characters', { ...validTicket, title: 'a'.repeat(201) }],
+    ['description over 5000 characters', { ...validTicket, description: 'b'.repeat(5001) }],
   ])('rejects invalid input: %s', async (_name, body) => {
     const response = await request(body)
     expect(response.status).toBe(400)

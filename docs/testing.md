@@ -1,10 +1,10 @@
 # Testing guide (Vitest baseline)
 
 This guide teaches you how to run, read, write, review, and troubleshoot the automated
-tests in this template. **It assumes no prior testing experience.** If a word looks
+tests in this project. **It assumes no prior testing experience.** If a word looks
 unfamiliar, check [Words you'll see](#words-youll-see) first.
 
-The template ships with a small **Vitest** baseline: one real component test for the
+The project ships with a small **Vitest** baseline: one real component test for the
 application shell. Vitest is the test runner (the program that finds and runs your tests).
 
 > **What this baseline needs:** nothing external. It runs with **no `.env` file, no
@@ -12,7 +12,7 @@ application shell. Vitest is the test runner (the program that finds and runs yo
 > You can clone the repo, install dependencies, and run the tests immediately.
 
 > **Playwright note:** browser/end-to-end testing with Playwright is intentionally **not**
-> part of this template. That work lives separately (NPTS). This guide is Vitest-only.
+> part of this project. That work lives separately (NPTS). This guide is Vitest-only.
 
 ---
 
@@ -74,7 +74,7 @@ open a new terminal.
 1. Get the code and enter the folder:
    ```bash
    git clone <your-repo-url>
-   cd nuxt-template
+   cd ITS
    ```
 2. Confirm you're at the root — you should see `package.json`:
    ```bash
@@ -171,9 +171,9 @@ describe('application shell (app.vue)', () => {
     // ACT: render the shell; stub <NuxtPage/> so no page/route loads.
     const wrapper = await mountSuspended(App, { global: { stubs: { NuxtPage: true } } })
 
-    // ASSERT: the brand link says "Nuxt Template" and points to "/".
+    // ASSERT: the brand link says "ITS" and points to "/".
     const brandLink = wrapper.get('a')
-    expect(brandLink.text()).toContain('Nuxt Template') // matcher: text contains
+    expect(brandLink.text()).toContain('ITS') // matcher: text contains
     expect(brandLink.attributes('href')).toBe('/') // matcher: exact equality
     expect(fetchSpy).not.toHaveBeenCalled() // matcher: never called
   })
