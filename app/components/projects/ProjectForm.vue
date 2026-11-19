@@ -9,6 +9,7 @@
   const githubRepo = ref('')
   const stageUrl = ref('')
   const prodUrl = ref('')
+  const subdomain = ref('')
 
   // UI state
   const creatingProject = ref(false)
@@ -40,8 +41,8 @@
       return 'GitHub repository is required.'
     }
 
-    if (!stageUrl.value.trim() && !prodUrl.value.trim()) {
-      return 'At least one staging or production URL is required.'
+    if (!stageUrl.value.trim() && !prodUrl.value.trim() && !subdomain.value.trim()) {
+      return 'A staging URL, production URL or NPTS subdomain is required.'
     }
 
     return null
@@ -99,6 +100,7 @@
           githubRepo: githubRepo.value.trim(),
           stageUrl: stageUrl.value.trim() || undefined,
           prodUrl: prodUrl.value.trim() || undefined,
+          subdomain: subdomain.value.trim() || undefined,
         },
       })
 
@@ -192,7 +194,14 @@
       <UInput v-model="prodUrl" placeholder="https://example.com" class="w-full" />
     </UFormField>
 
-    <p class="text-muted text-sm">At least one staging or production URL is required.</p>
+    <UFormField
+      label="NPTS Subdomain"
+      help="subdomain_name from the NPTS infra config, e.g. support for support-stage.npts.tech"
+    >
+      <UInput v-model="subdomain" placeholder="support" class="w-full" />
+    </UFormField>
+
+    <p class="text-muted text-sm">A staging URL, production URL or NPTS subdomain is required.</p>
 
     <div class="flex justify-end gap-3">
       <UButton type="submit" :loading="creatingProject" :disabled="creatingProject">

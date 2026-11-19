@@ -8,12 +8,14 @@ import {
   setResponseStatus,
 } from 'h3'
 import { z } from 'zod'
+import { eq, sql } from 'drizzle-orm'
 import { updateTicketSchema } from '#shared/tickets'
 import { project, tickets } from '../../db/schema'
 import { db } from '../../utils/db'
 import { createGitHubIssue } from '../../utils/github-issues'
 import { checkRateLimit } from '../../utils/rateLimit'
 import { verifyAltcha } from '../../utils/altcha'
+import { parseNptsOrigin } from '../../utils/npts-host'
 
 // Same fields as a partner ticket (title, description), plus the ALTCHA payload.
 // Strict, so callers can't set project, status, author or timestamps.
@@ -36,9 +38,48 @@ function originOf(value: string | null | undefined) {
   }
 }
 
+const projectColumns = { id: project.id, githubRepo: project.githubRepo }
+
+// Sites on npts.tech are found by name: the stage host carries the project's
+// subdomain, the prod host its GitHub repository name. Any other site (custom
+// domains, localhost) is found by its stored stage or prod URL.
+function findProjectByOrigin(header: string | null | undefined) {
+  const site = parseNptsOrigin(header)
+  if (site?.env === 'stage') {
+    return db
+      .select(projectColumns)
+      .from(project)
+      .where(eq(project.subdomain, site.subdomain))
+      .get()
+  }
+  if (site?.env === 'prod') {
+    // githubRepo is `owner/name`; compare the name part, ignoring case like GitHub.
+    // If two owners share a repo name, the oldest project wins.
+    return db
+      .select(projectColumns)
+      .from(project)
+      .where(
+        sql`lower(substr(${project.githubRepo}, instr(${project.githubRepo}, '/') + 1)) = ${site.repoName}`
+      )
+      .orderBy(project.id)
+      .get()
+  }
+
+  const origin = originOf(header)
+  if (!origin) return undefined
+  // ponytail: scans every project, since URLs may carry paths and SQL can't compare
+  // origins. Fine for tens of projects; add an indexed origin column past that.
+  return db
+    .select({ ...projectColumns, stageUrl: project.stageUrl, prodUrl: project.prodUrl })
+    .from(project)
+    .orderBy(project.id)
+    .all()
+    .find((p) => originOf(p.stageUrl) === origin || originOf(p.prodUrl) === origin)
+}
+
 // Public endpoint: lets the embeddable widget submit a ticket without a session.
-// The project is the one whose stage or prod URL has the same origin as the page
-// that embeds the widget (the browser sends it as the Origin header).
+// The project comes from the origin of the page that embeds the widget (the
+// browser sends it as the Origin header); see findProjectByOrigin.
 export default defineEventHandler(async (event) => {
   const result = widgetTicketSchema.safeParse(await readBody(event))
 
@@ -65,22 +106,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Find the project this widget is embedded in.
-  const origin = originOf(getRequestHeader(event, 'origin'))
-  // ponytail: scans every project, since URLs may carry paths and SQL can't compare
-  // origins. Fine for tens of projects; add an indexed origin column past that.
-  const targetProject = origin
-    ? db
-        .select({
-          id: project.id,
-          githubRepo: project.githubRepo,
-          stageUrl: project.stageUrl,
-          prodUrl: project.prodUrl,
-        })
-        .from(project)
-        .orderBy(project.id)
-        .all()
-        .find((p) => originOf(p.stageUrl) === origin || originOf(p.prodUrl) === origin)
-    : undefined
+  const targetProject = findProjectByOrigin(getRequestHeader(event, 'origin'))
 
   // Generic response: don't reveal which sites exist.
   if (!targetProject) {

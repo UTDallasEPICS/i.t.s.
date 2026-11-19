@@ -90,6 +90,14 @@ describe('POST /api/widget/tickets', () => {
         },
         // A project with no URLs: no page can match it.
         { id: 3, name: 'Website C', githubRepo: 'example/c', projectPartnerId: 'org-a' },
+        // Deployed on npts.tech: found by subdomain (stage) or repo name (prod), no URLs.
+        {
+          id: 4,
+          name: 'ITS',
+          githubRepo: 'UTDallasEPICS/ITS',
+          projectPartnerId: 'org-a',
+          subdomain: 'support',
+        },
       ])
       .run()
   })
@@ -132,6 +140,20 @@ describe('POST /api/widget/tickets', () => {
     expect(db.select().from(tickets).get()?.projectId).toBe(1)
   })
 
+  it.each([
+    ['stage host by subdomain', 'https://support-stage.npts.tech'],
+    ['prod host by repo name, ignoring case', 'https://prod-its.npts.tech'],
+  ])('finds an npts.tech project: %s', async (_name, origin) => {
+    const response = await request(validTicket, { origin })
+    expect(response.status).toBe(201)
+    expect(db.select().from(tickets).get()?.projectId).toBe(4)
+    expect(createGitHubIssue).toHaveBeenCalledWith(
+      'UTDallasEPICS/ITS',
+      expect.any(String),
+      expect.any(String)
+    )
+  })
+
   it('does not save a ticket when the GitHub issue cannot be created', async () => {
     vi.mocked(createGitHubIssue).mockRejectedValue(
       Object.assign(new Error('boom'), { statusCode: 502 })
@@ -149,6 +171,13 @@ describe('POST /api/widget/tickets', () => {
     ['opaque origin', { origin: 'null' }],
     ['garbage origin', { origin: 'not a url' }],
     ['no origin header', {}],
+    ['unknown npts subdomain', { origin: 'https://nope-stage.npts.tech' }],
+    ['unknown npts repo', { origin: 'https://prod-nope.npts.tech' }],
+    ['repo name used as stage subdomain', { origin: 'https://its-stage.npts.tech' }],
+    ['subdomain used as prod repo name', { origin: 'https://prod-support.npts.tech' }],
+    ['plain npts subdomain', { origin: 'https://support.npts.tech' }],
+    ['npts over http', { origin: 'http://support-stage.npts.tech' }],
+    ['npts look-alike host', { origin: 'https://support-stage.npts.tech.evil.test' }],
   ])('rejects %s with a generic 404', async (_name, headers) => {
     const response = await request(validTicket, headers)
     expect(response.status).toBe(404)

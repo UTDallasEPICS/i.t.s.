@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
       name: project.name,
       stageUrl: project.stageUrl,
       prodUrl: project.prodUrl,
+      subdomain: project.subdomain,
       githubRepo: project.githubRepo,
       projectPartnerId: project.projectPartnerId,
     })

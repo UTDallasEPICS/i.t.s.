@@ -7,6 +7,7 @@ import { db } from '../../../utils/db'
 import { organization, project } from '../../../db/schema'
 import { githubRepoSchema } from '../../../utils/github-repo-schema'
 import { projectUrlSchema } from '../../../utils/project-url-schema'
+import { subdomainSchema } from '../../../utils/npts-host'
 
 // Validate project creation input.
 const createProjectSchema = z
@@ -16,12 +17,16 @@ const createProjectSchema = z
     organizationId: z.string().uuid(),
     stageUrl: projectUrlSchema.optional(),
     prodUrl: projectUrlSchema.optional(),
+    // NPTS infra subdomain_name; lets the widget find the project on npts.tech.
+    subdomain: subdomainSchema.optional(),
 
     githubRepo: githubRepoSchema,
   })
-  .refine((data) => data.stageUrl !== undefined || data.prodUrl !== undefined, {
-    message: 'At least one of stageUrl or prodUrl is required',
-  })
+  .refine(
+    (data) =>
+      data.stageUrl !== undefined || data.prodUrl !== undefined || data.subdomain !== undefined,
+    { message: 'At least one of stageUrl, prodUrl or subdomain is required' }
+  )
 
 export default defineEventHandler(async (event) => {
   const currentUser = requireUser(event)
@@ -57,10 +62,13 @@ export default defineEventHandler(async (event) => {
   // Check whether either URL is already used by another project.
   const urls = [body.stageUrl, body.prodUrl].filter((url): url is string => url !== undefined)
 
-  const [existingProject] = await db
-    .select({ id: project.id })
-    .from(project)
-    .where(or(...urls.flatMap((url) => [eq(project.stageUrl, url), eq(project.prodUrl, url)])))
+  // No URLs (subdomain only): skip, since an empty or() would match every project.
+  const [existingProject] = urls.length
+    ? await db
+        .select({ id: project.id })
+        .from(project)
+        .where(or(...urls.flatMap((url) => [eq(project.stageUrl, url), eq(project.prodUrl, url)])))
+    : []
 
   if (existingProject) {
     throw createError({
@@ -68,6 +76,21 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Site URL already exists in another project',
     })
   }
+
+  if (body.subdomain !== undefined) {
+    const [subdomainOwner] = await db
+      .select({ id: project.id })
+      .from(project)
+      .where(eq(project.subdomain, body.subdomain))
+
+    if (subdomainOwner) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Subdomain already exists in another project',
+      })
+    }
+  }
+
   // Create the project.
 
   const [createdProject] = await db
@@ -77,6 +100,7 @@ export default defineEventHandler(async (event) => {
       projectPartnerId: body.organizationId,
       stageUrl: body.stageUrl,
       prodUrl: body.prodUrl,
+      subdomain: body.subdomain,
       githubRepo: body.githubRepo,
     })
     .returning()
