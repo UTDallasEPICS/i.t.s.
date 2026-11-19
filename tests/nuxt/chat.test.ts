@@ -65,6 +65,18 @@ beforeEach(() => {
 afterAll(() => db.$client.close())
 
 describe('getOrCreateThread', () => {
+  it('reuses unnamed group DMs but permits named channels with the same members', async () => {
+    const first = await getOrCreateThread(input)
+    const second = await getOrCreateThread(input)
+    const channel = await getOrCreateThread({ ...input, name: 'Planning' })
+    const anotherChannel = await getOrCreateThread({ ...input, name: 'Support' })
+    const again = await getOrCreateThread(input)
+
+    expect(second.thread.id).toBe(first.thread.id)
+    expect(again.thread.id).toBe(first.thread.id)
+    expect(new Set([first.thread.id, channel.thread.id, anotherChannel.thread.id]).size).toBe(3)
+    expect(channel.thread.name).toBe('Planning')
+  })
   it('creates the thread, unique members, and initial message atomically', async () => {
     const result = await getOrCreateThread({ ...input, otherMembers: ['b', 'a', 'b'] })
     expect(result.created).toBe(true)
@@ -78,7 +90,7 @@ describe('getOrCreateThread', () => {
     expect(emitChatThreadCreated).toHaveBeenCalledExactlyOnceWith(result.thread, ['b', 'a'])
   })
 
-  it('reuses the exact member set regardless of order without inserting another message', async () => {
+  it('reuses the exact member set and sends the message on reuse', async () => {
     const first = await getOrCreateThread(input)
     const second = await getOrCreateThread({
       ...input,
@@ -88,7 +100,7 @@ describe('getOrCreateThread', () => {
     expect(second).toEqual({ created: false, thread: first.thread })
     expect(emitChatThreadCreated).toHaveBeenCalledOnce()
     expect(db.select().from(chatThreads).all()).toHaveLength(1)
-    expect(db.select().from(chatThreadMessages).all()).toHaveLength(1)
+    expect(db.select().from(chatThreadMessages).all()).toHaveLength(2)
   })
 
   it('does not reuse a superset, subset, or different set with the same size', async () => {

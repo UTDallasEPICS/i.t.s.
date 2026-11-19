@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "be720123-a204-4f39-a75c-cb63c5309ca9",
+  "id": "0f629ba6-b2d2-4939-997a-820801d2d85a",
   "prevId": "a5429dea-7898-4314-95fc-ab9e65cf9e05",
   "tables": {
     "account": {
@@ -292,6 +292,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "projectId": {
           "name": "projectId",
           "type": "integer",
@@ -410,13 +417,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "siteTag": {
-          "name": "siteTag",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -426,13 +426,6 @@
             "projectPartnerId"
           ],
           "isUnique": false
-        },
-        "project_siteTag_unique": {
-          "name": "project_siteTag_unique",
-          "columns": [
-            "siteTag"
-          ],
-          "isUnique": true
         }
       },
       "foreignKeys": {

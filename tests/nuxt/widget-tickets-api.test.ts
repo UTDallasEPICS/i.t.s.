@@ -6,6 +6,7 @@ import { organization, project, tickets } from '../../server/db/schema'
 import { db } from '../../server/utils/db'
 import { resetRateLimits } from '../../server/utils/rateLimit'
 import widgetTicketsHandler from '../../server/api/widget/tickets.post'
+import { createGitHubIssue } from '../../server/utils/github-issues'
 
 // ALTCHA itself is tested in altcha.test.ts. Here we only control its answer.
 const { verifyAltcha } = vi.hoisted(() => ({ verifyAltcha: vi.fn() }))
@@ -19,18 +20,22 @@ vi.mock('../../server/utils/db', async () => {
   return { db: drizzle(new Database(':memory:'), { schema }) }
 })
 
+vi.mock('../../server/utils/github-issues', () => ({ createGitHubIssue: vi.fn() }))
+
 migrate(db, { migrationsFolder: './drizzle' })
 db.$client.pragma('foreign_keys = ON')
 
 const validTicket = {
-  siteTag: 'site-a',
   title: '  Registration form is broken  ',
   description: '  Nothing happens when I click Submit.  ',
   altcha: 'solved-payload',
 }
 
+// The browser sends the embedding page's origin; the endpoint finds the project from it.
+const siteA = { origin: 'https://site-a.example.com' }
+
 // No session middleware here: the widget endpoint must work for anonymous users.
-function requestRaw(body: string, headers: Record<string, string> = {}) {
+function requestRaw(body: string, headers: Record<string, string> = siteA) {
   const app = createApp()
   app.use('/api/widget/tickets', widgetTicketsHandler)
   return toWebHandler(app)(
@@ -42,7 +47,7 @@ function requestRaw(body: string, headers: Record<string, string> = {}) {
   )
 }
 
-function request(body: unknown = validTicket, headers: Record<string, string> = {}) {
+function request(body: unknown = validTicket, headers: Record<string, string> = siteA) {
   return requestRaw(JSON.stringify(body), headers)
 }
 
@@ -53,8 +58,14 @@ function expectNoTickets() {
 describe('POST /api/widget/tickets', () => {
   beforeEach(() => {
     resetRateLimits()
+
     verifyAltcha.mockReset()
     verifyAltcha.mockResolvedValue(true)
+    // tickets.githubIssueId is unique, so every issue needs its own number.
+    let issueNumber = 41
+    vi.mocked(createGitHubIssue)
+      .mockReset()
+      .mockImplementation(async () => String(++issueNumber))
     db.delete(tickets).run()
     db.delete(project).run()
     db.delete(organization).run()
@@ -66,10 +77,19 @@ describe('POST /api/widget/tickets', () => {
           name: 'Website A',
           githubRepo: 'example/a',
           projectPartnerId: 'org-a',
-          siteTag: 'site-a',
+          // The site can live at a path; only the origin is compared.
+          stageUrl: 'https://stage.site-a.example.com/app',
+          prodUrl: 'https://site-a.example.com/',
         },
-        // A project that hasn't set up the widget.
-        { id: 2, name: 'Website B', githubRepo: 'example/b', projectPartnerId: 'org-a' },
+        {
+          id: 2,
+          name: 'Website B',
+          githubRepo: 'example/b',
+          projectPartnerId: 'org-a',
+          prodUrl: 'https://site-b.example.com',
+        },
+        // A project with no URLs: no page can match it.
+        { id: 3, name: 'Website C', githubRepo: 'example/c', projectPartnerId: 'org-a' },
       ])
       .run()
   })
@@ -78,7 +98,7 @@ describe('POST /api/widget/tickets', () => {
     db.$client.close()
   })
 
-  it('saves an anonymous ticket under the site tag project and returns only the id', async () => {
+  it('saves an anonymous ticket under the project that owns the page origin and returns only the id', async () => {
     const response = await request()
     expect(response.status).toBe(201)
 
@@ -95,28 +115,56 @@ describe('POST /api/widget/tickets', () => {
         userId: null,
         status: 'open',
         timestamp: expect.any(String),
-        githubIssueId: null,
+        githubIssueId: '42',
       },
     ])
+    // The issue goes to the project repository, same as partner tickets.
+    expect(createGitHubIssue).toHaveBeenCalledWith(
+      'example/a',
+      'Registration form is broken',
+      'Nothing happens when I click Submit.'
+    )
   })
 
-  it('rejects an unknown site tag with a generic 404', async () => {
-    const response = await request({ ...validTicket, siteTag: 'unknown-site' })
+  it('matches the stage URL origin too', async () => {
+    const response = await request(validTicket, { origin: 'https://stage.site-a.example.com' })
+    expect(response.status).toBe(201)
+    expect(db.select().from(tickets).get()?.projectId).toBe(1)
+  })
+
+  it('does not save a ticket when the GitHub issue cannot be created', async () => {
+    vi.mocked(createGitHubIssue).mockRejectedValue(
+      Object.assign(new Error('boom'), { statusCode: 502 })
+    )
+    const response = await request()
+    expect(response.status).toBe(502)
+    expectNoTickets()
+  })
+
+  it.each([
+    ['unknown origin', { origin: 'https://unknown.example.com' }],
+    ['different port', { origin: 'https://site-a.example.com:8443' }],
+    ['different scheme', { origin: 'http://site-a.example.com' }],
+    ['look-alike host', { origin: 'https://site-a.example.com.evil.test' }],
+    ['opaque origin', { origin: 'null' }],
+    ['garbage origin', { origin: 'not a url' }],
+    ['no origin header', {}],
+  ])('rejects %s with a generic 404', async (_name, headers) => {
+    const response = await request(validTicket, headers)
     expect(response.status).toBe(404)
     expect(await response.json()).toMatchObject({ statusMessage: 'Not found' })
     expectNoTickets()
+    expect(createGitHubIssue).not.toHaveBeenCalled()
   })
 
   it.each([
     ['empty object', {}],
     ['null body', null],
     ['array body', [validTicket]],
-    ['missing site tag', { title: 'Issue', description: 'Details' }],
-    ['blank site tag', { ...validTicket, siteTag: '  ' }],
-    ['missing title', { siteTag: 'site-a', description: 'Details' }],
+    ['missing title', { description: 'Details' }],
     ['blank title', { ...validTicket, title: ' \n ' }],
     ['too long title', { ...validTicket, title: 'a'.repeat(201) }],
-    ['missing description', { siteTag: 'site-a', title: 'Issue' }],
+    ['missing description', { title: 'Issue' }],
     ['too long description', { ...validTicket, description: 'a'.repeat(5001) }],
     ['missing altcha', { siteTag: 'site-a', title: 'Issue', description: 'Details' }],
     ['blank altcha', { ...validTicket, altcha: '' }],
@@ -126,7 +174,7 @@ describe('POST /api/widget/tickets', () => {
     expectNoTickets()
   })
 
-  it.each(['projectId', 'userId', 'status', 'timestamp', 'githubIssueId'])(
+  it.each(['siteTag', 'projectId', 'userId', 'status', 'timestamp', 'githubIssueId'])(
     'rejects a caller-supplied %s field',
     async (field) => {
       const response = await request({ ...validTicket, [field]: 'forged' })
@@ -136,7 +184,7 @@ describe('POST /api/widget/tickets', () => {
   )
 
   it('rejects malformed JSON without writing a ticket', async () => {
-    const response = await requestRaw('{"siteTag":')
+    const response = await requestRaw('{"title":')
     expect(response.status).toBe(400)
     expectNoTickets()
   })
@@ -152,9 +200,22 @@ describe('POST /api/widget/tickets', () => {
     expect(db.select().from(tickets).all()).toHaveLength(3)
   })
 
+  it('limits each project to 50 tickets an hour across many clients', async () => {
+    for (let i = 0; i < 50; i++) {
+      expect(
+        (await request(validTicket, { ...siteA, 'x-forwarded-for': `7.7.${i}.1` })).status
+      ).toBe(201)
+    }
+    const blocked = await request(validTicket, { ...siteA, 'x-forwarded-for': '7.7.200.1' })
+    expect(blocked.status).toBe(429)
+    expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0)
+    // Another project is not affected.
+    expect((await request(validTicket, { origin: 'https://site-b.example.com' })).status).toBe(201)
+  })
+
   it('counts different clients separately', async () => {
-    const clientA = { 'x-forwarded-for': '1.1.1.1' }
-    const clientB = { 'x-forwarded-for': '2.2.2.2' }
+    const clientA = { ...siteA, 'x-forwarded-for': '1.1.1.1' }
+    const clientB = { ...siteA, 'x-forwarded-for': '2.2.2.2' }
 
     for (let i = 0; i < 3; i++) await request(validTicket, clientA)
     expect((await request(validTicket, clientA)).status).toBe(429)
@@ -163,9 +224,12 @@ describe('POST /api/widget/tickets', () => {
 
   it('uses the last X-Forwarded-For entry, so fake earlier entries do not bypass the limit', async () => {
     for (let i = 0; i < 3; i++) {
-      await request(validTicket, { 'x-forwarded-for': `10.0.0.${i}, 9.9.9.9` })
+      await request(validTicket, { ...siteA, 'x-forwarded-for': `10.0.0.${i}, 9.9.9.9` })
     }
-    const blocked = await request(validTicket, { 'x-forwarded-for': '10.0.0.99, 9.9.9.9' })
+    const blocked = await request(validTicket, {
+      ...siteA,
+      'x-forwarded-for': '10.0.0.99, 9.9.9.9',
+    })
     expect(blocked.status).toBe(429)
   })
 

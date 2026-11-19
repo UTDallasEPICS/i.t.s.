@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import Database from 'better-sqlite3'
-import { eq } from 'drizzle-orm'
+import { eq, isNull } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from './schema'
 
@@ -11,6 +11,9 @@ const db = drizzle(sqlite, { schema })
 const USER_EMAIL = 'seeded-user@email.com'
 const PARTNER_NAME = 'Sample Seeded Project Partner'
 const GITHUB_REPO_ITS = process.env.GITHUB_REPO_ITS ?? ''
+// Where `pnpm sample-site` serves the demo page. The widget on it matches the seeded
+// project through this origin (the browser's Origin header).
+const SAMPLE_SITE_URL = 'http://localhost:4000'
 
 type SeededUser = typeof schema.user.$inferSelect
 // An organization is a project partner. The table keeps the Better Auth model
@@ -63,11 +66,29 @@ async function seedProjectPartner(): Promise<SeededProjectPartner> {
 // The migration Lambda passes SEED_* vars from the env file; orgId stays null,
 // which gives this user NPTS (global) access.
 async function seedAdmin(email: string) {
-  await db
-    .insert(schema.user)
-    .values({ email, name: 'NPTS Admin' })
-    .onConflictDoNothing({ target: schema.user.email })
-  console.log({ admin: email })
+  const normalizedEmail = email.trim().toLowerCase()
+
+  const existing = await db.query.user.findFirst({
+    where: (u, { eq }) => eq(u.email, normalizedEmail),
+  })
+
+  if (existing) {
+    if (existing.orgId !== null) {
+      console.warn(`Skipping ${normalizedEmail}: existing account belongs to an organization.`)
+      return
+    }
+
+    console.log(`Admin already exists: ${normalizedEmail}`)
+    return
+  }
+
+  await db.insert(schema.user).values({
+    email: normalizedEmail,
+    name: 'NPTS Admin',
+    orgId: null,
+  })
+
+  console.log(`Admin created: ${normalizedEmail}`)
 }
 
 async function seedProject(partnerId: string) {
@@ -80,7 +101,19 @@ async function seedProject(partnerId: string) {
     where: (p, { eq }) => eq(p.id, 1),
   })
 
+  // The widget finds a project by its stage/prod URL origin. A project seeded before
+  // those columns existed has neither, so give it the sample site URL.
   if (existing) {
+    if (!existing.stageUrl && !existing.prodUrl) {
+      const [updated] = await db
+        .update(schema.project)
+        .set({ stageUrl: SAMPLE_SITE_URL })
+        .where(eq(schema.project.id, existing.id))
+        .returning()
+      console.log({ project: updated })
+      return updated ?? existing
+    }
+
     console.log({ project: existing })
     return existing
   }
@@ -92,7 +125,7 @@ async function seedProject(partnerId: string) {
       name: 'My Test Project',
       githubRepo: GITHUB_REPO_ITS,
       projectPartnerId: partnerId,
-      siteTag: 'sample-site-tag',
+      stageUrl: SAMPLE_SITE_URL,
     })
     .returning()
 
@@ -100,11 +133,106 @@ async function seedProject(partnerId: string) {
   return created
 }
 
+async function seedChatThreads() {
+  const partner = await seedProjectPartner()
+  const project = await seedProject(partner.id)
+
+  if (!project) return
+
+  const admin = await db.query.user.findFirst({
+    where: (u) => isNull(u.orgId),
+  })
+  const user = await db.query.user.findFirst({
+    where: (u, { eq }) => eq(u.email, USER_EMAIL),
+  })
+
+  if (!admin || !user) {
+    console.warn('Skipping chat seed: admin or seeded user not found.')
+    return
+  }
+
+  const threads = [
+    {
+      id: 1,
+      name: 'Community website',
+      projectId: project.id,
+      members: [admin.id, user.id],
+      messages: [
+        { userId: user.id, plainTextBody: 'Hi! We are preparing the community website for launch next week.' },
+        { userId: admin.id, plainTextBody: 'Great. Which part would you like us to take a look at first?' },
+        { userId: user.id, plainTextBody: 'The volunteer signup form. A few people said they could not finish submitting it on their phone.' },
+        { userId: admin.id, plainTextBody: 'Could you share the browser and the step where they got stuck? We can try to reproduce it.' },
+        { userId: user.id, plainTextBody: 'Safari on an iPhone. It happens after they select their availability and press Continue.' },
+        { userId: admin.id, plainTextBody: 'Thanks, that gives us a good starting point. We will check the mobile layout and validation.' },
+      ],
+    },
+    {
+      id: 2,
+      name: 'Volunteer onboarding',
+      projectId: project.id,
+      members: [admin.id, user.id],
+      messages: [
+        { userId: admin.id, plainTextBody: 'Can we review the new volunteer welcome email?' },
+      ],
+    },
+  ]
+
+  for (const thread of threads) {
+    const existing = await db.query.chatThreads.findFirst({
+      where: (t, { eq }) => eq(t.id, thread.id),
+    })
+
+    if (existing) {
+      console.log({ chatThread: existing })
+      continue
+    }
+
+    const [created] = await db
+      .insert(schema.chatThreads)
+      .values({ id: thread.id, name: thread.name, projectId: thread.projectId })
+      .returning()
+
+    if (!created) {
+      throw new Error(`failed to seed chat thread ${thread.id}`)
+    }
+
+    await db.insert(schema.chatThreadMembers).values(
+      thread.members.map(userId => ({ threadId: created.id, userId })),
+    )
+
+    await db.insert(schema.chatThreadMessages).values(
+      thread.messages.map((message, index) => ({
+        ...message,
+        threadId: created.id,
+        createdAt: new Date(Date.now() - (thread.messages.length - index) * 60_000),
+      })),
+    )
+
+    console.log({ chatThread: created, members: thread.members.length, messages: thread.messages.length })
+  }
+}
+
 async function main() {
   console.log('Start seeding...')
 
+  // Seed NPTS team members as administrators. SEED_ADMIN_EMAIL can add one
+  // deployment-specific admin without changing this list.
+  const adminEmails = new Set([
+    'seth2stephens@gmail.com',
+    'kevj.antony@gmail.com',
+    'hey@jasonaa.me',
+    'kimwan8076@gmail.com',
+    'sjaryan2007@gmail.com',
+    'samhappy8910@gmail.com',
+    'tushar.wani@npts.tech',
+  ])
+
   if (process.env.SEED_ADMIN_EMAIL) {
-    await seedAdmin(process.env.SEED_ADMIN_EMAIL)
+    adminEmails.add(process.env.SEED_ADMIN_EMAIL)
+  }
+
+  for (const email of adminEmails) {
+    await seedAdmin(email)
   }
 
   const user = await seedUser()
@@ -117,6 +245,8 @@ async function main() {
     await db.update(schema.user).set({ orgId: partner.id }).where(eq(schema.user.id, user.id))
     console.log({ user: { ...user, orgId: partner.id } })
   }
+
+  await seedChatThreads()
 
   console.log('Seeding finished.')
 }

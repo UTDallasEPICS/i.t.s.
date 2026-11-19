@@ -1,12 +1,16 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  // Shared component that lives in the main ITS app (app/components/shared).
-  // Importing it here proves UI code can be reused in the widget.
+  // Registers the <altcha-widget> custom element.
+  import 'altcha'
+  // Shared components that live in the main ITS app (app/components/shared).
+  // The ticket form is the same one the partner "New ticket" screen renders.
   import StatusPill from '../../app/components/shared/StatusPill.vue'
-  import WidgetTicketForm from './WidgetTicketForm.vue'
+  import TicketForm from '../../app/components/shared/TicketForm.vue'
+  import type { TicketSubmission } from '#shared/tickets'
 
-  // Values passed in from main.ts (site-tag="..." becomes siteTag)
-  const props = defineProps<{ siteTag: string; apiBase: string }>()
+  // Value passed in from main.ts. ITS picks the project from the page's origin (the
+  // Origin header the browser sends), so the embed needs no project id or tag.
+  const props = defineProps<{ apiBase: string }>()
 
   const open = ref(false)
   const state = ref<'idle' | 'loading' | 'ok' | 'error'>('idle')
@@ -16,15 +20,16 @@
   const result = ref<'idle' | 'sent' | 'error'>('idle')
   const message = ref('')
 
-  // Reachability check only: /api/health does not validate the site tag yet.
-  // Site-tag validation lands with the widget submission endpoint in #32.
+  // ALTCHA payload, set once the browser has solved the challenge (ADR 005).
+  const altchaPayload = ref('')
+  const altchaEl = ref<HTMLElement & { reset: () => void; verify: () => void }>()
+
+  // Reachability check only: /api/health does not validate the embedding site.
 
   async function checkConnection() {
     state.value = 'loading'
     try {
-      const res = await fetch(
-        `${props.apiBase}/api/health?siteTag=${encodeURIComponent(props.siteTag)}`
-      )
+      const res = await fetch(`${props.apiBase}/api/health`)
       state.value = res.ok ? 'ok' : 'error'
     } catch {
       state.value = 'error'
@@ -36,15 +41,35 @@
     if (open.value) checkConnection()
   }
 
-  // The form only reports what the user typed; the widget sends it to ITS.
-  async function submitTicket(ticket: { title: string; description: string; altcha: string }) {
+  // Keep the payload only while ALTCHA says it's verified (not expired or failed).
+  function onAltchaState(ev: Event) {
+    const { state, payload } = (ev as CustomEvent<{ state: string; payload?: string }>).detail
+    altchaPayload.value = state === 'verified' && payload ? payload : ''
+  }
+
+  // Each payload works only once, so start a new challenge for the next try.
+  function renewAltcha() {
+    altchaPayload.value = ''
+    altchaEl.value?.reset()
+    altchaEl.value?.verify()
+  }
+
+  // The form only reports what the user typed; the widget adds the ALTCHA payload
+  // and sends it to ITS. The page origin picks the project.
+  async function submitTicket(ticket: TicketSubmission) {
+    if (!altchaPayload.value) {
+      result.value = 'error'
+      message.value = 'Still checking that you are not a robot. Please try again in a moment.'
+      return
+    }
+
     submitting.value = true
     message.value = ''
     try {
       const res = await fetch(`${props.apiBase}/api/widget/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteTag: props.siteTag, ...ticket }),
+        body: JSON.stringify({ ...ticket, altcha: altchaPayload.value }),
       })
 
       if (res.status === 201) {
@@ -66,6 +91,7 @@
       message.value = 'Could not reach ITS. Please try again later.'
     } finally {
       submitting.value = false
+      if (result.value !== 'sent') renewAltcha()
     }
   }
 
@@ -92,8 +118,19 @@
       </div>
 
       <template v-else>
-        <WidgetTicketForm :submitting="submitting" :api-base="apiBase" @submit="submitTicket" />
-        <p v-if="message" class="message error">{{ message }}</p>
+        <TicketForm
+          omit-project
+          :submitting="submitting"
+          :error="result === 'error' ? message : null"
+          @submit="submitTicket"
+        />
+        <!-- Solves the challenge in the background as soon as the form opens. -->
+        <altcha-widget
+          ref="altchaEl"
+          auto="onload"
+          :challenge="`${apiBase}/api/widget/challenge`"
+          @statechange="onAltchaState"
+        />
       </template>
     </div>
     <button class="launcher" @click="toggle">?</button>
@@ -101,6 +138,10 @@
 </template>
 
 <style>
+  /* ALTCHA injects its CSS into document.head, which can't reach our Shadow DOM.
+     Import it here so it's bundled into the widget's shadow root. */
+  @import 'altcha/altcha.css';
+
   :host {
     all: initial; /* don't inherit fonts/colors from the host page */
   }

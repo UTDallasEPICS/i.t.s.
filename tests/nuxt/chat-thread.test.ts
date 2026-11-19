@@ -141,6 +141,22 @@ describe('ChatThread', () => {
     expect(mounted.get<HTMLTextAreaElement>('textarea').element.value).toBe('')
   })
 
+  it('keeps over-limit drafts editable, highlights overflow, and blocks sending', async () => {
+    const { adapter } = createAdapter()
+    const mounted = await mountThread(adapter)
+    const input = mounted.get('textarea')
+    await input.setValue('a'.repeat(4000))
+    expect(mounted.text()).toContain('4000 / 4000')
+    expect(mounted.get<HTMLButtonElement>('button[aria-label="Send message"]').element.disabled).toBe(false)
+    await input.setValue(`${'a'.repeat(4000)}extra`)
+    expect(mounted.get('mark').text()).toBe('extra')
+    expect(input.attributes('aria-invalid')).toBe('true')
+    expect(mounted.get<HTMLButtonElement>('button[aria-label="Send message"]').element.disabled).toBe(true)
+    await mounted.get('form').trigger('submit')
+    expect(adapter.sendMessage).not.toHaveBeenCalled()
+    expect((input.element as HTMLTextAreaElement).value).toHaveLength(4005)
+  })
+
   it('sends on Enter without inserting a newline', async () => {
     const { adapter } = createAdapter()
     const mounted = await mountThread(adapter)

@@ -40,10 +40,12 @@ type SocketHub = {
   url: string
   createSocket: SocketFactory
   subscribers: Set<HubSubscriber>
+  observers: Set<(frame: ChatServerFrame) => void>
   socket?: WebSocket
   timer?: ReturnType<typeof setTimeout>
   attempts: number
   openedBefore: boolean
+  ready: boolean
   status: ChatConnectionStatus
 }
 
@@ -82,8 +84,10 @@ function hubFor(url: string, createSocket: SocketFactory) {
       url,
       createSocket,
       subscribers: new Set(),
+      observers: new Set(),
       attempts: 0,
       openedBefore: false,
+      ready: false,
       status: 'offline',
     }
     hubs.set(url, hub)
@@ -92,6 +96,11 @@ function hubFor(url: string, createSocket: SocketFactory) {
 }
 
 function sendToSubscribers(hub: SocketHub, frame: ChatServerFrame) {
+  for (const observer of hub.observers) observer(frame)
+  if (frame.type === 'ready') {
+    hub.ready = true
+    for (const subscriber of hub.subscribers) void subscriber.handlers.onResync?.()
+  }
   if (frame.type !== 'message.created') return
 
   for (const subscriber of hub.subscribers) {
@@ -109,22 +118,16 @@ function setStatus(hub: SocketHub, status: ChatConnectionStatus) {
 }
 
 function connect(hub: SocketHub) {
+  hub.ready = false
   setStatus(hub, hub.openedBefore ? 'reconnecting' : 'connecting')
 
   const socket = hub.createSocket(hub.url)
   hub.socket = socket
 
   socket.addEventListener('open', () => {
-    const isReconnect = hub.openedBefore
     hub.openedBefore = true
     hub.attempts = 0
     setStatus(hub, 'live')
-
-    if (isReconnect) {
-      for (const subscriber of hub.subscribers) {
-        void subscriber.handlers.onResync?.()
-      }
-    }
   })
 
   socket.addEventListener('message', (event) => {
@@ -147,6 +150,7 @@ function connect(hub: SocketHub) {
 
   socket.addEventListener('close', () => {
     if (socket !== hub.socket) return
+    hub.ready = false
     scheduleReconnect(hub)
   })
 }
@@ -165,7 +169,7 @@ function scheduleReconnect(hub: SocketHub) {
 }
 
 function releaseHub(hub: SocketHub, createSocket: SocketFactory) {
-  if (hub.subscribers.size > 0) return
+  if (hub.subscribers.size > 0 || hub.observers.size > 0) return
 
   if (hub.timer !== undefined) clearTimeout(hub.timer)
   hub.timer = undefined
@@ -173,6 +177,21 @@ function releaseHub(hub: SocketHub, createSocket: SocketFactory) {
   hub.socket = undefined
   socket?.close()
   hubsByTransport.get(createSocket)?.delete(hub.url)
+}
+
+export function subscribeSessionChatEvents(
+  observer: (frame: ChatServerFrame) => void,
+  options: SessionChatAdapterOptions = {},
+) {
+  const createSocket = options.createSocket ?? browserSocket
+  const url = socketUrl(options.origin ?? (typeof window === 'undefined' ? 'http://localhost:3000' : window.location.origin))
+  const hub = hubFor(url, createSocket)
+  hub.observers.add(observer)
+  if (!hub.socket && hub.timer === undefined) connect(hub)
+  return () => {
+    hub.observers.delete(observer)
+    releaseHub(hub, createSocket)
+  }
 }
 
 /**
@@ -226,6 +245,7 @@ export function createSessionChatAdapter(
       connect(hub)
     } else {
       handlers.onStatusChange?.(hub.status)
+      if (hub.ready) void handlers.onResync?.()
     }
 
     return () => {

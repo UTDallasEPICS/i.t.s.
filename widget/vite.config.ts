@@ -13,6 +13,8 @@ export default defineConfig({
       features: { customElement: true },
     }),
   ],
+  // Same alias Nuxt provides, so shared components resolve the shared ticket contract
+  resolve: { alias: { '#shared': fileURLToPath(new URL('../shared', import.meta.url)) } },
   // Library builds don't replace this automatically; Vue needs it
   define: { 'process.env.NODE_ENV': JSON.stringify('production') },
   build: {

@@ -15,7 +15,16 @@ declare module 'nitropack/types' {
   interface NitroRuntimeHooks {
     'chat:message': (payload: ChatMessageEvent) => void | Promise<void>
     'chat:thread-created': (payload: ChatThreadCreatedEvent) => void | Promise<void>
+    'chat:member-joined': (payload: { userId: string, threadId: number }) => void | Promise<void>
   }
+}
+
+export function onChatMemberJoined(listener: (payload: { userId: string, threadId: number }) => void | Promise<void>) {
+  return useNitroApp().hooks.hook('chat:member-joined', listener)
+}
+
+export async function emitChatMemberJoined(userId: string, threadId: number) {
+  await useNitroApp().hooks.callHook('chat:member-joined', { userId, threadId })
 }
 
 export function onChatMessage(listener: (payload: ChatMessageEvent) => void | Promise<void>) {

@@ -1,10 +1,11 @@
 {
-  "name": "nuxt-template",
+  "name": "npts-issue-tracking-system",
   "type": "module",
   "private": true,
   "scripts": {
     "build": "pnpm build:widget && nuxt build",
     "dev": "nuxt dev",
+    "dev:otp": "tsx scripts/dev-otp.ts",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

@@ -66,7 +66,7 @@ Option 1 is a lot better on bundle size and on partner customization. Partners c
 
 ### Positive Consequences
 
-- Partners embed it with one line: `<script src="https://<its-host>/widget/v1/its-widget.js" data-site-tag="<site-tag>" defer></script>`
+- Partners embed it with one line: `<script src="https://<its-host>/widget/v1/its-widget.js" defer></script>`
 - `pnpm build` builds the widget before Nuxt, so it ships in the Docker image.
 - The widget reads the ITS API URL from its own script src, so the same bundle works on dev, stage, and prod without rebuilding.
 
