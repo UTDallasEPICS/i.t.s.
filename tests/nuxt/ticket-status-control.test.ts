@@ -108,8 +108,6 @@ describe('TicketStatusControl', () => {
     await flushPromises()
     // Should revert: the component's selectedStatus reactive ref goes back to 'open'.
     // We access it safely via the component vm without touching .props() on the wrapper.
-    const vm = select.vm as unknown as { modelValue: string } | undefined
-    // If USelect exposes modelValue, check it; otherwise verify via wrapper component state.
     const controlVm = wrapper.vm as unknown as { selectedStatus: string }
     expect(controlVm.selectedStatus).toBe('open')
   })
