@@ -27,19 +27,62 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Invalid request body',
     })
   }
-  const { orgId } = body as { orgId?: unknown }
 
-  // Validate the organization ID
-  const validatedOrgId = await validateOrganization(orgId)
-  if (validatedOrgId === null) {
+  const { orgId, name } = body as {
+    orgId?: unknown
+    name?: unknown
+  }
+
+  // Check which fields are being updated
+  const updatingOrg = orgId !== undefined
+  const updatingName = name !== undefined
+
+  if (!updatingOrg && !updatingName) {
     throw createError({
-      statusCode: 403,
-      statusMessage: 'Administrator promotion is not supported',
+      statusCode: 400,
+      statusMessage: 'No fields provided for update',
     })
   }
 
-  // Prevent users from changing their own organization and from editing administrators
-  if (currentUser.id === targetUserId) {
+  // Validate the new name
+  let validatedName: string | undefined
+
+  if (updatingName) {
+    if (typeof name !== 'string' || !name.trim()) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Name cannot be empty',
+      })
+    }
+
+    if (name.trim().length > 100) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Name must be 100 characters or fewer',
+      })
+    }
+
+    validatedName = name.trim()
+  }
+
+  // Validate organization only when it is being updated
+  let validatedOrgId: string | undefined
+
+  if (updatingOrg) {
+    const result = await validateOrganization(orgId)
+
+    if (result === null) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Administrator promotion is not supported',
+      })
+    }
+
+    validatedOrgId = result
+  }
+
+  // Prevent users from changing their own organization
+  if (updatingOrg && currentUser.id === targetUserId) {
     throw createError({
       statusCode: 400,
       statusMessage: 'You cannot change your own organization',
@@ -62,10 +105,12 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  if (targetUser.orgId === null) {
+  // Preserve the existing restriction on administrator accounts
+
+  if (updatingOrg && targetUser.orgId === null) {
     throw createError({
       statusCode: 403,
-      statusMessage: 'Administrator accounts cannot be changed',
+      statusMessage: 'Administrator organization cannot be changed',
     })
   }
 
@@ -80,7 +125,8 @@ export default defineEventHandler(async (event) => {
   const [updatedUser] = await db
     .update(user)
     .set({
-      orgId: validatedOrgId,
+      ...(updatingOrg ? { orgId: validatedOrgId } : {}),
+      ...(updatingName ? { name: validatedName } : {}),
       updatedAt: new Date(),
     })
     .where(eq(user.id, targetUserId))
@@ -99,7 +145,7 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    message: 'User organization updated successfully',
+    message: 'User updated successfully',
     user: updatedUser,
   }
 })
