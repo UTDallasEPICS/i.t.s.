@@ -84,6 +84,7 @@ export function readAccessibleTicket(
     ...detail,
     githubIssueUrl,
     canEdit: ticket.userId === currentUser.id && ticket.status === 'open',
+    canUpdateStatus: currentUser.orgId === null,
   }
 }
 

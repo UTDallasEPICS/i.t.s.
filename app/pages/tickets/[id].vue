@@ -53,6 +53,12 @@
       saveError.value = ''
     }
   )
+
+  function onStatusUpdated(updated: TicketDetail) {
+    if (ticket.value) ticket.value = updated
+    // Reflect new status in the ticket list without a full page reload.
+    refreshNuxtData('tickets')
+  }
 </script>
 
 <template>
@@ -72,7 +78,12 @@
           <h1 class="text-2xl font-bold break-words">{{ ticket.title }}</h1>
           <div class="flex items-center justify-between gap-4">
             <TicketStatusBadge :status="ticket.status" />
-            <!-- #48: mount the NPTS status control here and refresh after it saves. -->
+            <!-- #48: NPTS status control – only shown when canUpdateStatus is true -->
+            <TicketStatusControl
+              v-if="ticket.canUpdateStatus"
+              :ticket="ticket"
+              @updated="onStatusUpdated"
+            />
             <UButton v-if="ticket.canEdit && !editing" variant="outline" @click="startEditing"
               >Edit ticket</UButton
             >

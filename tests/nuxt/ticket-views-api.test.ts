@@ -179,6 +179,7 @@ describe('shared ticket reads', () => {
       githubIssueId: null,
       githubIssueUrl: null,
       canEdit: true,
+      canUpdateStatus: false,
     })
     expect(await (await request('/4')).json()).toMatchObject({
       userId: null,
