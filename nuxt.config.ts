@@ -2,14 +2,14 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  head: {
+  app:{head: {
     script: [
       {
         src: 'https://support-stage.npts.tech/widget/v1/its-widget.js',
         defer: true,
       },
     ],
-  },
+  }},
   hooks: {},
   modules: ['@nuxt/ui', '@nuxt/image', '@nuxt/eslint'],
   css: ['./assets/css/main.css'],
