@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 // Sites deployed by ITS live under this domain (see the NPTS infra `projects` list):
 //   stage: https://<subdomain>-stage.npts.tech  (<subdomain> = subdomain_name)
-//   prod:  https://prod-<repo>.npts.tech        (<repo> = GitHub repository name)
+//   prod:  https://<subdomain>.npts.tech
 export const NPTS_DOMAIN = 'npts.tech'
 
 // One DNS label: lowercase letters, digits and inner hyphens, at most 63 characters.
@@ -15,7 +15,7 @@ export const subdomainSchema = z
   .toLowerCase()
   .regex(DNS_LABEL, 'Subdomain must be lowercase letters, digits and hyphens')
 
-export type NptsSite = { env: 'stage'; subdomain: string } | { env: 'prod'; repoName: string }
+export type NptsSite = { env: 'stage' | 'prod'; subdomain: string }
 
 // Reads which NPTS deployment a page origin belongs to, or null if it is not one.
 // Only plain https origins on the default port count, same as the URL match.
@@ -38,9 +38,6 @@ export function parseNptsOrigin(origin: string | null | undefined): NptsSite | n
     const subdomain = label.slice(0, -'-stage'.length)
     return DNS_LABEL.test(subdomain) ? { env: 'stage', subdomain } : null
   }
-  if (label.startsWith('prod-')) {
-    const repoName = label.slice('prod-'.length)
-    return DNS_LABEL.test(repoName) ? { env: 'prod', repoName } : null
-  }
-  return null
+  // Any other single label is a prod host.
+  return { env: 'prod', subdomain: label }
 }

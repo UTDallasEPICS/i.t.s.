@@ -122,7 +122,7 @@ export const project = sqliteTable(
     name: text('name').notNull(),
     stageUrl: text('stageUrl'),
     prodUrl: text('prodUrl'),
-    // NPTS infra `subdomain_name`, ex: `support` for https://support-stage.npts.tech.
+    // NPTS infra `subdomain_name`, ex: `support` for support-stage.npts.tech and support.npts.tech.
     // The widget uses it to find the project from the page origin.
     subdomain: text('subdomain').unique(),
     // repo `full_name`. ex: `UTDallasEPICS/ITS`

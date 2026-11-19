@@ -8,7 +8,7 @@ import {
   setResponseStatus,
 } from 'h3'
 import { z } from 'zod'
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { updateTicketSchema } from '#shared/tickets'
 import { project, tickets } from '../../db/schema'
 import { db } from '../../utils/db'
@@ -40,28 +40,16 @@ function originOf(value: string | null | undefined) {
 
 const projectColumns = { id: project.id, githubRepo: project.githubRepo }
 
-// Sites on npts.tech are found by name: the stage host carries the project's
-// subdomain, the prod host its GitHub repository name. Any other site (custom
-// domains, localhost) is found by its stored stage or prod URL.
+// Sites on npts.tech are found by the project's subdomain, which both the stage
+// and prod hosts carry. Any other site (custom domains, localhost) is found by
+// its stored stage or prod URL.
 function findProjectByOrigin(header: string | null | undefined) {
   const site = parseNptsOrigin(header)
-  if (site?.env === 'stage') {
+  if (site) {
     return db
       .select(projectColumns)
       .from(project)
       .where(eq(project.subdomain, site.subdomain))
-      .get()
-  }
-  if (site?.env === 'prod') {
-    // githubRepo is `owner/name`; compare the name part, ignoring case like GitHub.
-    // If two owners share a repo name, the oldest project wins.
-    return db
-      .select(projectColumns)
-      .from(project)
-      .where(
-        sql`lower(substr(${project.githubRepo}, instr(${project.githubRepo}, '/') + 1)) = ${site.repoName}`
-      )
-      .orderBy(project.id)
       .get()
   }
 

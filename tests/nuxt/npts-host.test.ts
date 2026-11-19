@@ -6,20 +6,17 @@ describe('parseNptsOrigin', () => {
   it.each([
     ['https://support-stage.npts.tech', { env: 'stage', subdomain: 'support' }],
     ['https://sos-noble-awards-stage.npts.tech', { env: 'stage', subdomain: 'sos-noble-awards' }],
-    ['https://prod-its.npts.tech', { env: 'prod', repoName: 'its' }],
-    ['https://PROD-ITS.npts.tech', { env: 'prod', repoName: 'its' }],
-    [
-      'https://prod-b4g-email-automation.npts.tech',
-      { env: 'prod', repoName: 'b4g-email-automation' },
-    ],
+    ['https://support.npts.tech', { env: 'prod', subdomain: 'support' }],
+    ['https://SUPPORT.npts.tech', { env: 'prod', subdomain: 'support' }],
+    ['https://sos-noble-awards.npts.tech', { env: 'prod', subdomain: 'sos-noble-awards' }],
   ])('reads %s', (origin, expected) => {
     expect(parseNptsOrigin(origin)).toEqual(expected)
   })
 
   it.each([
-    'https://support.npts.tech',
+    'https://npts.tech',
     'https://-stage.npts.tech',
-    'https://prod-.npts.tech',
+    'https://support-.npts.tech',
     'https://a.support-stage.npts.tech',
     'https://support-stage.npts.tech.evil.test',
     'https://support-stagenpts.tech',

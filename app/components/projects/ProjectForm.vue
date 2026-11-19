@@ -196,7 +196,7 @@
 
     <UFormField
       label="NPTS Subdomain"
-      help="subdomain_name from the NPTS infra config, e.g. support for support-stage.npts.tech"
+      help="subdomain_name from the NPTS infra config, e.g. support for support-stage.npts.tech and support.npts.tech"
     >
       <UInput v-model="subdomain" placeholder="support" class="w-full" />
     </UFormField>
