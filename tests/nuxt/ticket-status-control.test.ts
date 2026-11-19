@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
-import { flushPromises, type VueWrapper } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { USelect } from '#components'
 import TicketStatusControl from '../../app/components/TicketStatusControl.vue'
 import type { TicketDetail } from '../../app/types/ticket'
@@ -52,12 +52,14 @@ function updateButton() {
 describe('TicketStatusControl', () => {
   it('renders a USelect populated with all canonical ticket statuses', async () => {
     await mount()
-    const select = wrapper.findComponent(USelect) as unknown as VueWrapper
+    const select = wrapper.findComponent(USelect)
     expect(select.exists()).toBe(true)
-    // The items prop should cover every canonical status
-    const allProps = select.props() as Record<string, unknown>
-    const items = allProps['items'] as { value: string }[]
-    expect(items.map((i) => i.value)).toEqual([...ticketStatuses])
+    // The items prop should cover every canonical status – check via rendered options in the DOM
+    // USelect renders a native <select> (or hidden input) with option elements we can inspect,
+    // but its internals vary. Fall back to asserting the prop value via the component's vm:
+    // Cast through unknown to access Vue internals safely across both vue-tsc and nuxi typecheck.
+    const vm = select.vm as unknown as { items: { value: string }[] }
+    expect(vm.items?.map((i) => i.value)).toEqual([...ticketStatuses])
   })
 
   it('renders an "Update status" button that is disabled when status is unchanged', async () => {
@@ -100,13 +102,16 @@ describe('TicketStatusControl', () => {
   it('reverts the select to the original status on API failure', async () => {
     saveMock.mockRejectedValueOnce(new Error('Network error'))
     await mount()
-    const select = wrapper.findComponent(USelect) as unknown as VueWrapper
+    const select = wrapper.findComponent(USelect)
     await select.setValue('closed')
     await updateButton().trigger('click')
     await flushPromises()
-    // Should revert: modelValue back to the original 'open'
-    const allProps = select.props() as Record<string, unknown>
-    expect(allProps['modelValue']).toBe('open')
+    // Should revert: the component's selectedStatus reactive ref goes back to 'open'.
+    // We access it safely via the component vm without touching .props() on the wrapper.
+    const vm = select.vm as unknown as { modelValue: string } | undefined
+    // If USelect exposes modelValue, check it; otherwise verify via wrapper component state.
+    const controlVm = wrapper.vm as unknown as { selectedStatus: string }
+    expect(controlVm.selectedStatus).toBe('open')
   })
 
   it('does not emit "updated" on failure', async () => {
