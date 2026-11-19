@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
-import { flushPromises } from '@vue/test-utils'
+import { flushPromises, type VueWrapper } from '@vue/test-utils'
 import { USelect } from '#components'
 import TicketStatusControl from '../../app/components/TicketStatusControl.vue'
 import type { TicketDetail } from '../../app/types/ticket'
@@ -52,7 +52,7 @@ function updateButton() {
 describe('TicketStatusControl', () => {
   it('renders a USelect populated with all canonical ticket statuses', async () => {
     await mount()
-    const select = wrapper.findComponent(USelect)
+    const select = wrapper.findComponent(USelect) as unknown as VueWrapper
     expect(select.exists()).toBe(true)
     // The items prop should cover every canonical status
     const allProps = select.props() as Record<string, unknown>
@@ -100,7 +100,7 @@ describe('TicketStatusControl', () => {
   it('reverts the select to the original status on API failure', async () => {
     saveMock.mockRejectedValueOnce(new Error('Network error'))
     await mount()
-    const select = wrapper.findComponent(USelect)
+    const select = wrapper.findComponent(USelect) as unknown as VueWrapper
     await select.setValue('closed')
     await updateButton().trigger('click')
     await flushPromises()
