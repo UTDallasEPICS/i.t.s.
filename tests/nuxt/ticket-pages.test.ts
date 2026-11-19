@@ -45,6 +45,7 @@ const detail: TicketDetail = {
   githubIssueId: null,
   githubIssueUrl: null,
   canEdit: true,
+  canUpdateStatus: false,
 }
 let wrapper: VueWrapper
 const status = ref('success')

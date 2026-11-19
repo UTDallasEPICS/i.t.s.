@@ -4,6 +4,16 @@ import type { tickets } from '../server/db/schema'
 export const TICKET_TITLE_MAX = 200
 export const TICKET_DESCRIPTION_MAX = 5000
 
+// Canonical set of ticket statuses. Add new values here and they propagate to
+// the API validator, the UI select, and any shared types automatically.
+export const ticketStatuses = ['open', 'in_progress', 'awaiting_partner', 'resolved', 'closed'] as const
+export type TicketStatus = (typeof ticketStatuses)[number]
+
+// Zod schema for the status-only PATCH body (used by NPTS endpoint).
+export const updateStatusSchema = z.object({
+  status: z.enum(ticketStatuses, { error: 'Invalid ticket status' }),
+})
+
 // Shared by the widget, ITS form and API; identity and status are server-owned.
 export const createTicketSchema = z.strictObject({
   projectId: z.number({ error: 'Choose a project.' }).int().positive(),
@@ -40,4 +50,6 @@ export type TicketDetail = TicketSummary &
     submitterName: string | null
     githubIssueUrl: string | null
     canEdit: boolean
+    /** True when the authenticated user is an NPTS member who may update the status. */
+    canUpdateStatus: boolean
   }
