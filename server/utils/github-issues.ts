@@ -17,7 +17,7 @@ export async function createGitHubIssue(repo: string, title: string, description
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'Nuxt-MVP-App',
       },
-      body: { title, body: description, labels: ['npts'] },
+      body: { title, body: description, labels: ['its-support'] },
     })
 
     return String(issue.number)
